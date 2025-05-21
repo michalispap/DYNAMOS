@@ -8,7 +8,7 @@ class DynamosHandler < Handler
   end
 
   STIMULI = %w[amqp_send].freeze
-  RESPONSES = %w[amqp_recieve].freeze
+  RESPONSES = %w[amqp_receive].freeze
   private_constant :STIMULI, :RESPONSES
 
   DYNAMOS_URL = 'ws://127.0.0.1:3001'

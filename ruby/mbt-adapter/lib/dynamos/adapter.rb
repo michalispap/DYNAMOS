@@ -16,7 +16,7 @@ class Adapter
 
     broker_connection = BrokerConnection.new(@url, @token)
     handler = DynamosHandler.new
-    logger.info 'This is a test messag..'
+    logger.info 'This is a test message...'
     handler.start
 
     logger.info 'Waiting 5 seconds before sending initial request...'

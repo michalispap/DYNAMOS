@@ -41,4 +41,3 @@ dev: proto
 
 all: $(targets)
 
-
