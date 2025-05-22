@@ -2,7 +2,7 @@ SHELL := /bin/bash
 targets := sql-query
 datasets := "../configuration/datasets/"
 branch_name := $(shell git rev-parse --abbrev-ref HEAD)
-dockerhub_account := dynamos1
+dockerhub_account := michalispap99
 
 .PHONY: proto $(targets) dynamos
 

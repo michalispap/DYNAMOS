@@ -1,7 +1,7 @@
 SHELL := /bin/bash
 targets := mbt-adapter
 branch_name := $(shell git rev-parse --abbrev-ref HEAD)
-dockerhub_account := dynamos1
+dockerhub_account := michalispap99
 
 # Set defaults for environment variables
 ADAPTER_NAME ?= default_name

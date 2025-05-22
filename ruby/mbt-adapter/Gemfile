@@ -3,7 +3,7 @@
 source 'https://rubygems.org' do
   gem 'base64'
   gem 'bunny', '>= 2.23.0'
-  gem 'google-protobuf', '~> 3.21'
+  gem 'google-protobuf'
   gem 'json'
   gem 'logger'
   gem 'logging', '~> 2.4'

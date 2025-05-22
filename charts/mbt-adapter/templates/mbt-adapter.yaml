@@ -16,18 +16,11 @@ spec:
     spec:
       containers:
       - name: mbt-adapter
-        #image: {{ .Values.dockerArtifactAccount }}/mbt-adapter:{{ .Values.branchNameTag}}
-        image: michalispap99/mbt-adapter:latest
+        image: {{ .Values.dockerArtifactAccount }}/mbt-adapter:{{ .Values.branchNameTag}}
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
         env:
-        - name: ADAPTER_URL
-          value: wss://research01.axini.com:443/adapters
-        - name: ADAPTER_TOKEN
-          value: axini_1ce0a4ff57526806434b6b092716777481d12ce3a5a05d1d942ac29bdad4fd1f2334
-        - name: ADAPTER_NAME
-          value: dynamos
         - name: AMQ_PASSWORD
           valueFrom:
             secretKeyRef:
