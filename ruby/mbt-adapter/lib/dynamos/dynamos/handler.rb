@@ -7,7 +7,7 @@ class DynamosHandler < Handler
     super
   end
 
-  STIMULI = %w[amqp_send].freeze
+  STIMULI = %w[sql_data_request].freeze
   RESPONSES = %w[amqp_receive].freeze
   private_constant :STIMULI, :RESPONSES
 
@@ -54,14 +54,27 @@ class DynamosHandler < Handler
     @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
 
     # Send AMQP message to SUT
-    DynamosApi.stimulate_dynamos
+    DynamosApi.new.stimulate_dynamos(sut_message)
   end
 
   # @see super
   def supported_labels
     labels = []
 
-    STIMULI.each { |name| labels << stimulus(name) }
+    # Map each stimulus to its parameters
+    stimulus_parameters = {
+      'sql_data_request' => [
+        parameter('user', :string),
+        parameter('dataProviders', :string),
+        parameter('data_request', :string)
+      ]
+    }
+
+    STIMULI.each do |name|
+      params = stimulus_parameters[name] || []
+      labels << stimulus(name, params)
+    end
+
     RESPONSES.each { |name| labels << response(name) }
 
     # extra stimulus to reset the SUT
@@ -74,7 +87,7 @@ class DynamosHandler < Handler
   def default_configuration
     url = PluginAdapter::Api::Configuration::Item.new(
       key: 'url',
-      description: 'WebSocket URL for standalone SmartDoor SUT',
+      description: 'WebSocket URL for the DYNAMOS SUT',
       string: DYNAMOS_URL
     )
 
@@ -107,6 +120,21 @@ class DynamosHandler < Handler
   end
 
   private
+
+  # Converters
+
+  # Convert a label to a DYNAMOS message
+  def label_to_sut_message(label)
+    {
+      type: label.label,
+      parameters: label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
+    }.to_json
+  end
+
+  # Helper function
+  def extract_value(value)
+    value.string.presence || value.integer.presence || value.boolean.presence
+  end
 
   # Simple factory methods for PluginAdapter::Api objects.
 

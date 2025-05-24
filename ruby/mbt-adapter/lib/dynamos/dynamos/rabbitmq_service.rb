@@ -12,8 +12,12 @@ class RabbitMQService
     @queue = nil
     @amp_handler = amp_handler # Reference to an AMP handler for sending errors
 
-    connect
-    start_consuming
+    #connect
+    #start_consuming
+  end
+
+  def on_connected(&block)
+    @on_connected = block
   end
 
   def connect
@@ -23,6 +27,8 @@ class RabbitMQService
     @channel = @connection.create_channel
     @queue = @channel.queue(@queue_name, durable: true)
     logger.debug "Queue '#{@queue_name}' is ready."
+    @on_connected&.call
+    start_consuming
   rescue Bunny::TCPConnectionFailedForAllHosts => e
     message = "Connection failed: #{e.message}"
     logger.error(message)
@@ -48,6 +54,11 @@ class RabbitMQService
   rescue Interrupt
     close
     logger.info 'Consumer interrupted. Connection closed.'
+  end
+
+  def send_message(message)
+    @channel.default_exchange.publish(message, routing_key: @queue.name)
+    logger.info("Sent message to queue '#{@queue_name}': #{message}")
   end
 
   # Close the connection gracefully

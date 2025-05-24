@@ -23,6 +23,10 @@ class DynamosConnection
   # Connect to AMP's plugin adapter broker and register WebSocket callbacks.
   def connect
     @queue_handler = RabbitMQService.new(@handler)
+    @queue_handler.on_connected do
+      @handler.send_ready_to_amp
+    end
+    @queue_handler.connect
   end
 
   # Close the given websocket with the given response close code and reason.
