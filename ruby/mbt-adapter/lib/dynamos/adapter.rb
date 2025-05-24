@@ -10,7 +10,7 @@ class Adapter
   end
 
   def run
-    logger.info 'Starting adapter.'
+    logger.info 'Starting adapter...'
     logger.info "Using URL #{@url}"
     logger.info "Using token #{@token}"
 

@@ -37,7 +37,8 @@ appender = Logging::Appenders::Stdout.new('root', layout: layout)
 Logging.logger.root.appenders = appender
 
 # Step 4: Set the log level
-Logging.logger.root.level = :debug
+LOG_LEVEL = :info # Other options are :debug, :warn, :error
+Logging.logger.root.level = LOG_LEVEL
 
 # Step 5: Include the Logging module globally in the application
 send(:include, Logging.globally)
