@@ -10,7 +10,7 @@ if [ $? -ne 0 ]; then
 fi
 
 echo "Running uninstall_adapter..."
-uninstall_adapter
+helm uninstall mbt-adapter
 if [ $? -ne 0 ]; then
   echo "uninstall_adapter failed"
   exit 1
@@ -20,7 +20,8 @@ echo "Waiting for a minute just be sure..."
 sleep 60
 
 echo "Running deploy_adapter..."
-deploy_adapter
+chart="${DYNAMOS_ROOT}/charts/mbt-adapter/values.yaml"
+helm upgrade -i -f "${chart}" mbt-adapter ${DYNAMOS_ROOT}/charts/mbt-adapter
 if [ $? -ne 0 ]; then
   echo "deploy_adapter failed"
   exit 1
