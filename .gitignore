@@ -40,3 +40,6 @@ datasets/*.csv
 
 
 *.byebug_history
+
+# Adapter log file
+adapter_logs.txt

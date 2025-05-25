@@ -12,8 +12,8 @@ class DynamosApi
 
     response = Net::HTTP.post(uri, request_body, request_properties)
 
-    logger.info("Response status: #{response.code}")
-    logger.info("Response body: #{response.body}")
+    # logger.info("Response status: #{response.code}")
+    # logger.info("Response body: #{response.body}")
 
     response
   end
