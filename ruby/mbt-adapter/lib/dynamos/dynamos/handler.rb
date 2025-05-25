@@ -8,7 +8,7 @@ class DynamosHandler < Handler
   end
 
   STIMULI = %w[sql_data_request].freeze
-  RESPONSES = %w[amqp_receive].freeze
+  RESPONSES = %w[rabbitmq_message results].freeze
   private_constant :STIMULI, :RESPONSES
 
   DYNAMOS_URL = 'ws://127.0.0.1:3001'
@@ -56,8 +56,13 @@ class DynamosHandler < Handler
     # Send confirmation of stimulus back to AMP
     @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
 
-    # Send AMQP message to SUT
-    DynamosApi.new.stimulate_dynamos(sut_message)
+    # Send AMQP message to SUT (not yet implemented)
+
+    # Send HTTP request to SUT
+    result = DynamosApi.new.stimulate_dynamos(sut_message)
+
+    # Send HTTP response to AMP
+    send_response_to_amp(result) if result
   end
 
   # @see super
@@ -119,9 +124,13 @@ class DynamosHandler < Handler
   def send_response_to_amp(message)
     return if message == 'RESET_PERFORMED' # not a real response
 
+    if message.is_a?(Hash) && message['responses'].is_a?(Array)
+      message['responses'] = message['responses'].map(&:to_json)
+    end
+
     label = sut_message_to_label(message)
     timestamp = Time.now
-    physical_label = message
+    physical_label = message.is_a?(String) ? message : message.to_json
     @adapter_core.send_response(label, physical_label, timestamp)
   end
 
@@ -174,13 +183,59 @@ class DynamosHandler < Handler
     nil
   end
 
+  def sut_message_to_label(message)
+    label = PluginAdapter::Api::Label.new
+    label.type = :RESPONSE
+    label.label = "results"
+
+    message.each do |key, value|
+      param = PluginAdapter::Api::Label::Parameter.new(
+        name: key.to_s,
+        value: value_to_label_param(value)
+      )
+      label.parameters << param
+    end
+
+    label
+  end
+
+  def value_to_label_param(obj)
+    case obj
+    when Hash
+      entries = obj.map do |k, v|
+        PluginAdapter::Api::Label::Parameter::Value::Hash::Entry.new(
+          key: PluginAdapter::Api::Label::Parameter::Value.new(string: k.to_s),
+          value: value_to_label_param(v)
+        )
+      end
+      PluginAdapter::Api::Label::Parameter::Value.new(
+        struct: PluginAdapter::Api::Label::Parameter::Value::Hash.new(entries: entries)
+      )
+    when Array
+      PluginAdapter::Api::Label::Parameter::Value.new(
+        array: PluginAdapter::Api::Label::Parameter::Value::Array.new(
+          values: obj.map { |v|
+            begin
+              parsed = JSON.parse(v)
+              value_to_label_param(parsed)
+            rescue
+              PluginAdapter::Api::Label::Parameter::Value.new(string: v.to_s)
+            end
+          }
+        )
+      )
+    else
+      PluginAdapter::Api::Label::Parameter::Value.new(string: obj.to_s)
+    end
+  end
+
   # Simple factory methods for PluginAdapter::Api objects.
 
-  def stimulus(name, parameters = {}, channel = 'amqp')
+  def stimulus(name, parameters = {}, channel = 'dynamos_channel')
     label(name, :STIMULUS, parameters, channel)
   end
 
-  def response(name, parameters = {}, channel = 'amqp')
+  def response(name, parameters = {}, channel = 'dynamos_channel')
     label(name, :RESPONSE, parameters, channel)
   end
 

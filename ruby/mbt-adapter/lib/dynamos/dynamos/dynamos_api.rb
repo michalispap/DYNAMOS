@@ -15,7 +15,20 @@ class DynamosApi
     # logger.info("Response status: #{response.code}")
     # logger.info("Response body: #{response.body}")
 
-    response
+    parse_response(response)
+  end
+
+  def parse_response(response)
+    body = response.body
+    return nil if body.nil? || body.strip.empty?
+    parsed = JSON.parse(body)
+    if parsed.key?("jobId") && parsed.key?("responses") && parsed["responses"].is_a?(Array) && parsed["responses"].any? { |r| !r.to_s.strip.empty? }
+      return parsed
+    else
+      return nil
+    end
+  rescue JSON::ParserError
+    return nil
   end
 
   # def request_body

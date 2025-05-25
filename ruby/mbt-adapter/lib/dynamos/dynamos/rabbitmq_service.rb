@@ -49,7 +49,7 @@ class RabbitMQService
 
       store_message(parse_message(body))
 
-      @amp_handler&.send_response_to_amp(message)
+      # @amp_handler&.send_response_to_amp(message)
     end
   rescue Interrupt
     close

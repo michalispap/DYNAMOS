@@ -38,7 +38,7 @@ class BrokerConnection
     end
 
     @driver.on :message do |event|
-      @adapter_core.handle_message(event.data)
+      @adapter_core.handle_message(event.data.bytes)
     end
 
     start_listening
