@@ -78,23 +78,16 @@ class RabbitMQService
   end
 
   def parse_message(json_message)
-    # Step 1: Parse the outer JSON
-    parsed = JSON.parse(json_message)
-
-    type = parsed['Type']
-    base64_body = parsed['Body']
-
-    # Step 2: Decode the base64-encoded protobuf binary
-    proto_binary = Base64.decode64(base64_body)
-
-    type[0].upcase
-    type[1..]
-    klass = klass_from_type(type)
-
-    if klass
-      klass&.decode(proto_binary)
-    else
-      logger.error "Unknown message type: #{type}"
+    begin
+      parsed = JSON.parse(json_message)
+      type = parsed['Type']
+      base64_body = parsed['Body']
+      proto_binary = Base64.decode64(base64_body)
+      klass = klass_from_type(type)
+      klass ? klass.decode(proto_binary) : logger.error("Unknown message type: #{type}")
+    rescue JSON::ParserError
+      logger.warn("Received non-JSON message: #{json_message.inspect}")
+      json_message # Return the raw message for further handling
     end
   end
 

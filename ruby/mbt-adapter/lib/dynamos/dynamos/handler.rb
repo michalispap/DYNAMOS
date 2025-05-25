@@ -48,9 +48,12 @@ class DynamosHandler < Handler
   # @see super
   def stimulate(label)
     logger.info "Executing stimulus at the SUT: #{label.label}"
-    sut_message = label_to_sut_message(label)
 
-    # send confirmation of stimulus back to AMP
+    logger.info "AMP provided label: #{label.inspect}"
+    sut_message = label_to_sut_message(label)
+    logger.info "Generated SUT message: #{sut_message}"
+
+    # Send confirmation of stimulus back to AMP
     @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
 
     # Send AMQP message to SUT
@@ -61,12 +64,29 @@ class DynamosHandler < Handler
   def supported_labels
     labels = []
 
-    # Map each stimulus to its parameters
+    user_fields = {
+      'id' => [:string, nil],
+      'userName' => [:string, nil]
+    }
+
+    data_request_fields = {
+      'type' => [:string, nil],
+      'query' => [:string, nil],
+      'algorithm' => [:string, nil],
+      'options' => [
+        :object, {
+        'graph' => [:boolean, nil],
+        'aggregate' => [:boolean, nil]
+      }
+      ],
+      'requestMetadata' => [:object, {}]
+    }
+
     stimulus_parameters = {
       'sql_data_request' => [
-        parameter('user', :string),
-        parameter('dataProviders', :string),
-        parameter('data_request', :string)
+        parameter('user', :object, user_fields),
+        parameter('dataProviders', :array, nil),
+        parameter('data_request', :object, data_request_fields)
       ]
     }
 
@@ -125,15 +145,33 @@ class DynamosHandler < Handler
 
   # Convert a label to a DYNAMOS message
   def label_to_sut_message(label)
-    {
-      type: label.label,
-      parameters: label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
-    }.to_json
+    params = label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
+    type = label.label == 'sql_data_request' ? 'sqlDataRequest' : label.label
+    { type: type }.merge(params).to_json
   end
 
   # Helper function
   def extract_value(value)
-    value.string.presence || value.integer.presence || value.boolean.presence
+    return value.string if value.respond_to?(:has_string?) && value.has_string?
+    return value.integer if value.respond_to?(:has_integer?) && value.has_integer?
+    return value.decimal if value.respond_to?(:has_decimal?) && value.has_decimal?
+    return value.boolean if value.respond_to?(:has_boolean?) && value.has_boolean?
+    return value.date if value.respond_to?(:has_date?) && value.has_date?
+    return value.time if value.respond_to?(:has_time?) && value.has_time?
+    if value.respond_to?(:has_array?) && value.has_array?
+      return value.array.values.map { |v| extract_value(v) }
+    end
+    if value.respond_to?(:has_struct?) && value.has_struct?
+      return value.struct.entries.each_with_object({}) do |entry, h|
+        h[extract_value(entry.key)] = extract_value(entry.value)
+      end
+    end
+    if value.respond_to?(:has_hash_value?) && value.has_hash_value?
+      return value.hash_value.entries.each_with_object({}) do |entry, h|
+        h[extract_value(entry.key)] = extract_value(entry.value)
+      end
+    end
+    nil
   end
 
   # Simple factory methods for PluginAdapter::Api objects.
@@ -146,16 +184,37 @@ class DynamosHandler < Handler
     label(name, :RESPONSE, parameters, channel)
   end
 
-  def parameter(name, type)
-    value = case type
-            when :integer
-              PluginAdapter::Api::Label::Parameter::Value.new(integer: 0)
-            when :string
-              PluginAdapter::Api::Label::Parameter::Value.new(string: '')
-            else
-              raise "#{type} not yet implemented"
-            end
-    PluginAdapter::Api::Label::Parameter.new(name: name, value: value)
+  def parameter(name, type, fields = nil)
+    PluginAdapter::Api::Label::Parameter.new(name: name, value: build_value(type, fields))
+  end
+
+  def build_value(type, fields = nil)
+    case type
+    when :integer
+      PluginAdapter::Api::Label::Parameter::Value.new(integer: 0)
+    when :string
+      PluginAdapter::Api::Label::Parameter::Value.new(string: '')
+    when :boolean
+      PluginAdapter::Api::Label::Parameter::Value.new(boolean: false)
+    when :array
+      PluginAdapter::Api::Label::Parameter::Value.new(
+        array: PluginAdapter::Api::Label::Parameter::Value::Array.new(
+          values: [PluginAdapter::Api::Label::Parameter::Value.new(string: '')]
+        )
+      )
+    when :object
+      entries = (fields || {}).map do |field_name, (field_type, subfields)|
+        PluginAdapter::Api::Label::Parameter::Value::Hash::Entry.new(
+          key: PluginAdapter::Api::Label::Parameter::Value.new(string: field_name),
+          value: build_value(field_type, subfields)
+        )
+      end
+      PluginAdapter::Api::Label::Parameter::Value.new(
+        struct: PluginAdapter::Api::Label::Parameter::Value::Hash.new(entries: entries)
+      )
+    else
+      raise "#{type} not yet implemented"
+    end
   end
 
   def label(name, direction, parameters, channel)

@@ -7,9 +7,13 @@ class DynamosApi
     uri = URI.parse("#{@api_gateway_url}/#{endpoint}")
     request_properties = { 'Content-Type' => 'application/json' }
 
-    logger.info("Stimulating SUT with body: #{request_body}")
+    logger.info("Stimulating SUT at URL: #{uri}")
+    logger.info("Request body: #{request_body}")
+
     response = Net::HTTP.post(uri, request_body, request_properties)
-    logger.info("Response from SUT: #{response.body}")
+
+    logger.info("Response status: #{response.code}")
+    logger.info("Response body: #{response.body}")
 
     response
   end
