@@ -5,7 +5,7 @@ cd ruby || { echo "Failed to enter ruby directory. Are you in the DYNAMOS direct
 echo "Running make all..."
 make all
 if [ $? -ne 0 ]; then
-  echo "make all failed. Is the Docker Engine running?"
+  echo "make all failed. Are you sure Docker Engine is running?"
   exit 1
 fi
 
@@ -16,8 +16,8 @@ if [ $? -ne 0 ]; then
   exit 1
 fi
 
-echo "Waiting for a minute just be sure..."
-sleep 60
+echo "Waiting for a bit just be sure..."
+sleep 40
 
 echo "Running deploy_adapter..."
 chart="${DYNAMOS_ROOT}/charts/mbt-adapter/values.yaml"

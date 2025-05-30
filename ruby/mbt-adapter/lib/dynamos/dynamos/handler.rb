@@ -15,6 +15,7 @@ class DynamosHandler < Handler
     compositionRequest
     requestApprovalResponse
     microserviceCommunication
+    http_response_status
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
@@ -63,13 +64,38 @@ class DynamosHandler < Handler
     # Send confirmation of stimulus back to AMP
     @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
 
-    # Send AMQP message to SUT (not yet implemented)
-
     # Send HTTP request to SUT
-    result = DynamosApi.new.stimulate_dynamos(sut_message)
+    api = DynamosApi.new
+    http_call_result = api.stimulate_dynamos(sut_message)
+    http_status_code = http_call_result[:code]
+    response_body_str = http_call_result[:body_str]
 
-    # Send HTTP response to AMP
-    send_response_to_amp(result) if result
+    # Send the http_response_status label to AMP immediately
+    status_label = PluginAdapter::Api::Label.new(
+      type: :RESPONSE,
+      label: "http_response_status",
+      channel: "dynamos_channel"
+    )
+    status_label.parameters << PluginAdapter::Api::Label::Parameter.new(
+      name: 'code',
+      value: value_to_label_param(http_status_code) # Helper handles type conversion
+    )
+    status_physical_label = { code: http_status_code }.to_json
+    @adapter_core.send_response(status_label, status_physical_label, Time.now)
+    logger.info "Sent 'http_response_status' (code: #{http_status_code}) to AMP."
+
+    # Conditionally process and send "results" label
+    # Assuming 2xx are successful responses for "results"
+    if http_status_code >= 200 && http_status_code < 300
+      parsed_results = api.parse_response(response_body_str)
+      if parsed_results
+        send_response_to_amp(parsed_results) # This existing method handles "results"
+      else
+        logger.info "HTTP request successful (code: #{http_status_code}), but response body was not in the expected 'results' format or was nil. Not sending 'results' to AMP."
+      end
+    else
+      logger.info "HTTP request was not successful (code: #{http_status_code}). Not attempting to parse for 'results'."
+    end
   end
 
   # @see super
@@ -135,6 +161,9 @@ class DynamosHandler < Handler
       ],
       'microserviceCommunication' => [
         parameter('return_address', :string)
+      ],
+      'http_response_status' => [ # Definition for the new label
+        parameter('code', :integer)
       ]
     }
 
