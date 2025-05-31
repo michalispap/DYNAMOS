@@ -109,7 +109,8 @@ class DynamosHandler < Handler
     }
     data_request_options_fields = { # For 'data_request' & 'requestApproval'.
       'graph' => [:boolean, nil],
-      'aggregate' => [:boolean, nil]
+      'aggregate' => [:boolean, nil],
+      'anonymize' => [:boolean, nil]
     }
     data_request_fields = { # For 'data_request' object in 'sql_data_request'.
       'type' => [:string, nil], # 'type' within 'data_request' object.
