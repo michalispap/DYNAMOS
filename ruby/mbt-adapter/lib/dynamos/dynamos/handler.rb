@@ -162,7 +162,7 @@ class DynamosHandler < Handler
       'microserviceCommunication' => [
         parameter('return_address', :string)
       ],
-      'http_response_status' => [ # Definition for the new label
+      'http_response_status' => [
         parameter('code', :integer)
       ]
     }
@@ -190,7 +190,7 @@ class DynamosHandler < Handler
   end
 
   def send_response_to_amp(message)
-    # This method is now ONLY for HTTP 'results' responses
+    # This method is ONLY for HTTP 'results' responses
     return if message == 'RESET_PERFORMED' # not a real response
 
     # Specific pre-processing for 'results' if its 'responses' field contains complex objects
@@ -207,7 +207,7 @@ class DynamosHandler < Handler
 
   def process_rabbitmq_message(parsed_data_from_service)
     original_type = parsed_data_from_service[:type]
-    payload = parsed_data_from_service[:payload] # This is now a pure Ruby hash
+    payload = parsed_data_from_service[:payload]
     raw_json_body = parsed_data_from_service[:raw_json]
 
     unless original_type && payload.is_a?(Hash)
@@ -228,7 +228,7 @@ class DynamosHandler < Handler
     when 'validationResponse'
       if payload.key?('valid_dataproviders') && payload['valid_dataproviders'].is_a?(Hash)
         selected_params['valid_dataproviders'] = payload['valid_dataproviders'].keys # Array of names
-      elsif payload.key?('valid_dataproviders') # If it's already an array (less likely from proto map)
+      elsif payload.key?('valid_dataproviders') # If it's already an array
          selected_params['valid_dataproviders'] = Array(payload['valid_dataproviders'])
       end
       selected_params['invalid_dataproviders'] = Array(payload['invalid_dataproviders']) if payload.key?('invalid_dataproviders')
@@ -318,7 +318,7 @@ class DynamosHandler < Handler
   end
 
   def sut_message_to_label(message)
-    # This method is now specifically for the 'results' (HTTP) response
+    # This method is specifically for the 'results' (HTTP) response
     label = PluginAdapter::Api::Label.new
     label.type = :RESPONSE
     label.label = "results" # Hardcoded for HTTP responses
@@ -349,7 +349,7 @@ class DynamosHandler < Handler
   end
 
   def value_to_label_param(obj)
-    # This method now expects pure Ruby types due to dynamos_object_to_hash
+    # This method expects pure Ruby types due to dynamos_object_to_hash
     logger.debug "DynamosHandler#value_to_label_param: obj class: #{obj.class}, obj inspect: #{obj.inspect}"
     case obj
     when Hash
@@ -425,9 +425,7 @@ class DynamosHandler < Handler
       PluginAdapter::Api::Label::Parameter::Value.new(
         struct: PluginAdapter::Api::Label::Parameter::Value::Hash.new(entries: entries)
       )
-    # Removed :map case as we are aiming for 'struct' with pre-defined fields for selected params
-    # If a true dynamic map (hash_value) is needed for a specific selected parameter, it can be added.
-    # For now, selected parameters that are objects (like 'options') will be structs.
+
     else
       raise "#{type} not yet implemented in build_value"
     end

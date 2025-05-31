@@ -10,8 +10,7 @@ module OpenSSL
   end
 end
 
-# The DynamosConnection holds the WebSocket connection with the standalone
-# DYNAMOS SUT
+# The DynamosConnection holds the WebSocket connection with the standalone DYNAMOS SUT
 class DynamosConnection
   def initialize(handler)
     @handler = handler

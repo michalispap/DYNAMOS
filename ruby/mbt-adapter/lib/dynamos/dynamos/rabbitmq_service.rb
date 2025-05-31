@@ -47,7 +47,7 @@ class RabbitMQService
       logger.info "Received properties #{properties}"
       logger.info "Received message: #{body}"
 
-      # parse_message now returns { type: string, payload: ruby_hash, raw_json: string } or original body if not JSON/Proto
+      # parse_message returns { type: string, payload: ruby_hash, raw_json: string } or original body if not JSON/Proto
       parsed_data = parse_message(body)
 
       if parsed_data.is_a?(Hash) && parsed_data[:payload]
@@ -55,7 +55,6 @@ class RabbitMQService
         @amp_handler&.process_rabbitmq_message(parsed_data)
       elsif parsed_data # It was a non-JSON message, or proto decoding failed but we have raw_json
         store_message(parsed_data.is_a?(Hash) ? parsed_data[:raw_json] : parsed_data) # Store raw
-        # Decide if you want to send non-successfully decoded messages to AMP or just log
         logger.warn "RabbitMQService: Message was not fully processed into a payload, not sending to AMP handler: #{parsed_data.inspect}"
       end
     end
@@ -138,7 +137,7 @@ class RabbitMQService
                      .split('_')
                      .map(&:capitalize)
                      .join
-    if Dynamos.const_defined?(class_name, false) # false to not trigger autoload
+    if Dynamos.const_defined?(class_name, false)
       Dynamos.const_get(class_name, false)
     else
       logger.warn "Protobuf class Dynamos::#{class_name} not found for type '#{type}'."
