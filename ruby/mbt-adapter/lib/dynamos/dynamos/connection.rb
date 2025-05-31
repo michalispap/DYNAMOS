@@ -1,7 +1,8 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# WebSocket::Driver requires the TCPSocket object to have an attribute url.
+# Monkey-patch OpenSSL::SSL::SSLSocket to add an 'url' attribute.
+# Required by WebSocket::Driver client for SSL (not directly used by this class).
 module OpenSSL
   module SSL
     class SSLSocket
@@ -10,32 +11,36 @@ module OpenSSL
   end
 end
 
-# The DynamosConnection holds the WebSocket connection with the standalone DYNAMOS SUT
+# Manages the connection to the DYNAMOS SUT via RabbitMQ.
+# Wraps RabbitMQService for SUT communication.
 class DynamosConnection
   def initialize(handler)
-    @handler = handler
-    @socket  = nil
-    @driver  = nil
-    @queue_handler = nil
+    @handler = handler # The main adapter handler (DynamosHandler).
+    @socket  = nil # Not used for RabbitMQ.
+    @driver  = nil # Not used for RabbitMQ.
+    @queue_handler = nil # RabbitMQService instance.
   end
 
-  # Connect to AMP's plugin adapter broker and register WebSocket callbacks.
+  # Establishes SUT connection via RabbitMQ.
+  # Initializes RabbitMQService and sets a callback for when connected.
   def connect
     @queue_handler = RabbitMQService.new(@handler)
+    # Callback executed once RabbitMQService is connected.
     @queue_handler.on_connected do
-      @handler.send_ready_to_amp
+      @handler.send_ready_to_amp # Notify AMP that adapter is ready.
     end
-    @queue_handler.connect
+    @queue_handler.connect # Initiate RabbitMQ connection.
   end
 
-  # Close the given websocket with the given response close code and reason.
-  # @param [Integer] code
-  # @param [String] reason
+  # Closes SUT connection (RabbitMQ).
+  # 'reason' and 'code' are for WebSocket API compatibility, not used here.
   def close(reason: nil, code: 1000)
-    @queue_handler&.close
+    @queue_handler&.close # Delegate to RabbitMQService.
   end
 
+  # Sends a message to the SUT via RabbitMQ.
   def send(message)
-    @queue_handler.send_message(message)
+    @queue_handler.send_message(message) # Delegate to RabbitMQService.
   end
 end
+

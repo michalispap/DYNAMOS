@@ -1,12 +1,15 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
+# Core logic for the DYNAMOS adapter.
+# Handles AMP lifecycle, SUT interactions (HTTP & RabbitMQ), and defines adapter interface.
 class DynamosHandler < Handler
   def initialize
-    @connection = nil
+    @connection = nil # Manages SUT connection (via RabbitMQ).
     super
   end
 
+  # Supported stimulus and response label names for AMP.
   STIMULI = %w[sql_data_request].freeze
   RESPONSES = %w[
     results
@@ -19,19 +22,19 @@ class DynamosHandler < Handler
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
-  DYNAMOS_URL = 'ws://127.0.0.1:3001'
+  DYNAMOS_URL = 'ws://127.0.0.1:3001' # Default SUT URL (not directly used for RabbitMQ).
 
-  # Prepare to start testing.
+  # Prepares adapter for test session: connects to SUT (RabbitMQ).
   def start
     return unless @connection.nil?
 
     logger.info 'Starting. Trying to connect to the SUT.'
-    @connection = DynamosConnection.new(self)
+    @connection = DynamosConnection.new(self) # Wraps RabbitMQService.
     @connection.connect
-    # When the connection is open, the :open callback will send Ready to AMP.
+    # DynamosConnection's on_connected callback signals AMP when ready.
   end
 
-  # Stop testing.
+  # Ends test session: closes SUT connection.
   def stop
     logger.info 'Stop testing and close the connection to the SUT.'
     return unless @connection
@@ -40,37 +43,35 @@ class DynamosHandler < Handler
     @connection = nil
   end
 
-  # Prepare for the next test case.
+  # Prepares for next test case: reuses SUT connection if possible.
   def reset
     logger.info 'Reset the connection to the SUT.'
-    # Try to reuse the WebSocket connection to the SUT.
     if @connection
-      send_reset_to_sut
-      send_ready_to_amp
+      send_reset_to_sut # Send RESET to SUT via RabbitMQ.
+      send_ready_to_amp # Signal AMP adapter is ready.
     else
+      # If no connection, perform full stop and start.
       stop
       start
     end
   end
 
-  # @see super
+  # Handles stimulus from AMP: sends request to SUT.
   def stimulate(label)
     logger.info "Executing stimulus at the SUT: #{label.label}"
-
-    logger.info "AMP provided label: #{label.inspect}"
-    sut_message = label_to_sut_message(label)
+    sut_message = label_to_sut_message(label) # Convert AMP Label to SUT JSON.
     logger.info "Generated SUT message: #{sut_message}"
 
-    # Send confirmation of stimulus back to AMP
+    # Confirm to AMP that stimulus is being processed.
     @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
 
-    # Send HTTP request to SUT
+    # --- SUT HTTP Interaction ---
     api = DynamosApi.new
-    http_call_result = api.stimulate_dynamos(sut_message)
+    http_call_result = api.stimulate_dynamos(sut_message) # HTTP POST to SUT.
     http_status_code = http_call_result[:code]
     response_body_str = http_call_result[:body_str]
 
-    # Send the http_response_status label to AMP immediately
+    # Report HTTP status code to AMP immediately.
     status_label = PluginAdapter::Api::Label.new(
       type: :RESPONSE,
       label: "http_response_status",
@@ -78,77 +79,73 @@ class DynamosHandler < Handler
     )
     status_label.parameters << PluginAdapter::Api::Label::Parameter.new(
       name: 'code',
-      value: value_to_label_param(http_status_code) # Helper handles type conversion
+      value: value_to_label_param(http_status_code) # Convert Ruby int to AMP param.
     )
     status_physical_label = { code: http_status_code }.to_json
     @adapter_core.send_response(status_label, status_physical_label, Time.now)
     logger.info "Sent 'http_response_status' (code: #{http_status_code}) to AMP."
 
-    # Conditionally process and send "results" label
-    # Assuming 2xx are successful responses for "results"
-    if http_status_code >= 200 && http_status_code < 300
-      parsed_results = api.parse_response(response_body_str)
+    # Conditionally process SUT's HTTP response body for "results".
+    if http_status_code >= 200 && http_status_code < 300 # Check for 2xx success.
+      parsed_results = api.parse_response(response_body_str) # Parse for "results".
       if parsed_results
-        send_response_to_amp(parsed_results) # This existing method handles "results"
+        send_response_to_amp(parsed_results) # Send "results" label to AMP if valid.
       else
-        logger.info "HTTP request successful (code: #{http_status_code}), but response body was not in the expected 'results' format or was nil. Not sending 'results' to AMP."
+        logger.info "HTTP request successful (code: #{http_status_code}), but 'results' format invalid/nil. Not sending 'results' to AMP."
       end
     else
-      logger.info "HTTP request was not successful (code: #{http_status_code}). Not attempting to parse for 'results'."
+      logger.info "HTTP request not successful (code: #{http_status_code}). Not parsing for 'results'."
     end
   end
 
-  # @see super
+  # Defines adapter's interface (supported labels) to AMP.
   def supported_labels
     labels = []
 
-    # --- Field Definitions for Reusability ---
+    # Reusable field definitions for complex AMP label parameters.
     user_fields = {
       'id' => [:string, nil],
       'userName' => [:string, nil]
     }
-
-    data_request_options_fields = { # Used by requestApproval's options
+    data_request_options_fields = { # For 'data_request' & 'requestApproval'.
       'graph' => [:boolean, nil],
       'aggregate' => [:boolean, nil]
     }
-
-    data_request_fields = { # For sql_data_request stimulus
-      'type' => [:string, nil],
+    data_request_fields = { # For 'data_request' object in 'sql_data_request'.
+      'type' => [:string, nil], # 'type' within 'data_request' object.
       'query' => [:string, nil],
       'algorithm' => [:string, nil],
       'options' => [:object, data_request_options_fields],
-      'requestMetadata' => [:object, {}] # Assuming empty or generic object
+      'requestMetadata' => [:object, {}] # Empty/generic object.
     }
 
-    # --- Stimulus Definitions ---
+    # Stimulus label definitions.
     stimulus_parameters = {
       'sql_data_request' => [
+        parameter('request_type', :string), # Top-level 'type' for SUT JSON.
         parameter('user', :object, user_fields),
-        parameter('dataProviders', :array, :string), # AMP expects element type for array
+        parameter('dataProviders', :array, :string), # Array of strings.
         parameter('data_request', :object, data_request_fields)
       ]
     }
-
     STIMULI.each do |name|
-      params = stimulus_parameters[name] || []
-      labels << stimulus(name, params)
+      params = stimulus_parameters[name] || [] # Default to no params.
+      labels << stimulus(name, params) # `stimulus` is a factory method.
     end
 
-    # --- Response Definitions ---
-    # Define parameters only for the selected fields
+    # Response label definitions.
     response_parameters = {
       'results' => [
         parameter('jobId', :string),
-        parameter('responses', :array, :string) # Array of JSON strings
+        parameter('responses', :array, :string) # Array of JSON strings.
       ],
       'requestApproval' => [
         parameter('data_providers', :array, :string),
         parameter('options', :object, data_request_options_fields)
       ],
       'validationResponse' => [
-        parameter('valid_dataproviders', :array, :string), # Array of names (strings)
-        parameter('invalid_dataproviders', :array, :string), # Array of names (strings)
+        parameter('valid_dataproviders', :array, :string), # Array of provider names.
+        parameter('invalid_dataproviders', :array, :string), # Array of provider names.
         parameter('request_approved', :boolean)
       ],
       'compositionRequest' => [
@@ -157,7 +154,7 @@ class DynamosHandler < Handler
         parameter('destination_queue', :string)
       ],
       'requestApprovalResponse' => [
-        parameter('error', :string) # Assuming error is a simple string
+        parameter('error', :string) # Simple string error.
       ],
       'microserviceCommunication' => [
         parameter('return_address', :string)
@@ -166,17 +163,16 @@ class DynamosHandler < Handler
         parameter('code', :integer)
       ]
     }
-
     RESPONSES.each do |name|
-      params = response_parameters[name] || [] # Use defined params or empty if none
-      labels << response(name, params)
+      params = response_parameters[name] || []
+      labels << response(name, params) # `response` is a factory method.
     end
 
-    labels << stimulus('reset') # No parameters for reset
+    labels << stimulus('reset') # 'reset' stimulus has no parameters.
     labels
   end
 
-  # The default configuration for this adapter.
+  # Defines default adapter configuration.
   def default_configuration
     url = PluginAdapter::Api::Configuration::Item.new(
       key: 'url',
@@ -189,46 +185,49 @@ class DynamosHandler < Handler
     configuration
   end
 
+  # Sends "results" response (from SUT HTTP call) to AMP.
+  # @param message [Hash] SUT "results" message.
   def send_response_to_amp(message)
-    # This method is ONLY for HTTP 'results' responses
-    return if message == 'RESET_PERFORMED' # not a real response
+    # Specific to HTTP "results" responses.
+    return if message == 'RESET_PERFORMED' # Ignore internal reset signal.
 
-    # Specific pre-processing for 'results' if its 'responses' field contains complex objects
+    # Ensure 'responses' elements are JSON strings if complex.
     if message.is_a?(Hash) && message['responses'].is_a?(Array)
-      # Ensure elements of 'responses' are JSON strings if they are not already strings
       message['responses'] = message['responses'].map { |r| r.is_a?(String) ? r : r.to_json }
     end
 
-    label = sut_message_to_label(message) # Expects HTTP response structure for 'results'
+    label = sut_message_to_label(message) # Convert SUT "results" hash to AMP Label.
     timestamp = Time.now
-    physical_label = message.is_a?(String) ? message : message.to_json # For 'results'
+    physical_label = message.is_a?(String) ? message : message.to_json
     @adapter_core.send_response(label, physical_label, timestamp)
   end
 
+  # Processes messages from RabbitMQ and forwards to AMP.
+  # @param parsed_data_from_service [Hash] Contains :type, :payload (Hash), :raw_json.
   def process_rabbitmq_message(parsed_data_from_service)
-    original_type = parsed_data_from_service[:type]
-    payload = parsed_data_from_service[:payload]
-    raw_json_body = parsed_data_from_service[:raw_json]
+    original_type = parsed_data_from_service[:type]     # e.g., "validationResponse"
+    payload = parsed_data_from_service[:payload]         # Decoded Ruby hash from Protobuf.
+    raw_json_body = parsed_data_from_service[:raw_json]  # Original JSON from RabbitMQ.
 
-    unless original_type && payload.is_a?(Hash)
-      logger.error "DynamosHandler: Invalid data received for RabbitMQ processing. Type: #{original_type.inspect}, Payload Class: #{payload.class}"
+    unless original_type && payload.is_a?(Hash) # Basic validation.
+      logger.error "DynamosHandler: Invalid data from RabbitMQService. Type: #{original_type.inspect}, Payload Class: #{payload.class}"
       return
     end
+    logger.info "DynamosHandler: Processing RabbitMQ message type '#{original_type}'."
 
-    logger.info "DynamosHandler: Processing RabbitMQ message of type '#{original_type}'."
-    logger.debug "DynamosHandler: Payload: #{payload.inspect}"
-
+    # Select/transform parameters from payload for AMP.
     selected_params = {}
-    amp_label_name = original_type
+    amp_label_name = original_type # AMP label name usually matches RabbitMQ type.
 
     case original_type
     when 'requestApproval'
       selected_params['data_providers'] = payload['data_providers'] if payload.key?('data_providers')
       selected_params['options'] = payload['options'] if payload.key?('options')
     when 'validationResponse'
+      # 'valid_dataproviders' might be hash (keys are names) or array.
       if payload.key?('valid_dataproviders') && payload['valid_dataproviders'].is_a?(Hash)
-        selected_params['valid_dataproviders'] = payload['valid_dataproviders'].keys # Array of names
-      elsif payload.key?('valid_dataproviders') # If it's already an array
+        selected_params['valid_dataproviders'] = payload['valid_dataproviders'].keys
+      elsif payload.key?('valid_dataproviders') # If already array or other.
          selected_params['valid_dataproviders'] = Array(payload['valid_dataproviders'])
       end
       selected_params['invalid_dataproviders'] = Array(payload['invalid_dataproviders']) if payload.key?('invalid_dataproviders')
@@ -238,44 +237,47 @@ class DynamosHandler < Handler
       selected_params['role'] = payload['role'] if payload.key?('role')
       selected_params['destination_queue'] = payload['destination_queue'] if payload.key?('destination_queue')
     when 'requestApprovalResponse'
-      selected_params['error'] = payload['error'] if payload.key?('error') # Assuming 'error' is a top-level string
+      selected_params['error'] = payload['error'] if payload.key?('error')
     when 'microserviceCommunication'
+      # Dig into nested structure for 'return_address'.
       selected_params['return_address'] = payload.dig('request_metadata', 'return_address')
     else
-      logger.warn "DynamosHandler: No specific parameter selection defined for RabbitMQ message type '#{original_type}'. Not sending to AMP."
-      return # Do not send if type is not explicitly handled for selection
+      # If type not explicitly handled, don't send to AMP.
+      logger.warn "DynamosHandler: No parameter selection for RabbitMQ type '#{original_type}'. Not sending to AMP."
+      return
     end
     
     logger.info "DynamosHandler: Selected parameters for '#{amp_label_name}': #{selected_params.inspect}"
 
-    # Construct the Label object
+    # Construct AMP Label object.
     label_to_send = PluginAdapter::Api::Label.new(
       type: :RESPONSE,
       label: amp_label_name.to_s,
-      channel: 'dynamos_channel' # Assuming all RabbitMQ messages use this channel
+      channel: 'dynamos_channel' # Assuming all RabbitMQ messages use this AMP channel.
     )
-
     selected_params.each do |name, value|
-      # Skip adding parameter if value is nil and you don't want to send nil parameters
-      # next if value.nil? # Optional: uncomment if you want to omit nil parameters
+      # `value_to_label_param` converts Ruby types to AMP Protobuf Value.
       label_to_send.parameters << PluginAdapter::Api::Label::Parameter.new(
         name: name.to_s,
-        value: value_to_label_param(value) # value_to_label_param expects pure Ruby types
+        value: value_to_label_param(value)
       )
     end
     
-    # Send to AMP via AdapterCore
+    # Send constructed label and original raw JSON to AMP.
     @adapter_core.send_response(label_to_send, raw_json_body, Time.now)
   end
 
+  # Sends error message string to AMP.
   def send_error_to_amp(message)
     @adapter_core.send_error(message)
   end
 
+  # Signals AMP that adapter is ready for testing.
   def send_ready_to_amp
     @adapter_core.send_ready
   end
 
+  # Sends "RESET" command to SUT (via RabbitMQ).
   def send_reset_to_sut
     reset_string = 'RESET'
     logger.info "Sending '#{reset_string}' to SUT"
@@ -284,16 +286,37 @@ class DynamosHandler < Handler
 
   private
 
-  # Converters
+  # --- Converters: AMP Label <-> SUT Message ---
 
-  # Convert a label to a DYNAMOS message
+  # Converts AMP Label ('sql_data_request' stimulus) to JSON string for DYNAMOS SUT.
   def label_to_sut_message(label)
-    params = label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
-    type = label.label == 'sql_data_request' ? 'sqlDataRequest' : label.label
-    { type: type }.merge(params).to_json
+    # Extract all AMP Label parameters into a Ruby hash.
+    params_hash = label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
+
+    sut_top_level_type = nil
+    sut_payload = {}
+
+    if label.label == 'sql_data_request'
+      # Use 'request_type' param from AMP for top-level 'type' in SUT JSON.
+      sut_top_level_type = params_hash.delete('request_type')
+      # Fallback if 'request_type' is missing in model.
+      unless sut_top_level_type
+        logger.warn "DynamosHandler: 'request_type' param missing for 'sql_data_request'. Defaulting to 'sqlDataRequest'."
+        sut_top_level_type = 'sqlDataRequest' # Default if not specified by AMP.
+      end
+      # Remaining params (user, dataProviders, data_request) form the payload.
+      sut_payload = params_hash
+    else
+      # Fallback for other (currently undefined) stimuli.
+      sut_top_level_type = label.label
+      sut_payload = params_hash
+    end
+    # Construct final SUT message:
+    # e.g., { "type": "sqlDataRequest", "user": {...}, ... }
+    { type: sut_top_level_type }.merge(sut_payload).to_json
   end
 
-  # Helper function
+  # Recursively extracts Ruby values from AMP Label::Parameter::Value objects.
   def extract_value(value)
     return value.string if value.respond_to?(:has_string?) && value.has_string?
     return value.integer if value.respond_to?(:has_integer?) && value.has_integer?
@@ -302,35 +325,37 @@ class DynamosHandler < Handler
     return value.date if value.respond_to?(:has_date?) && value.has_date?
     return value.time if value.respond_to?(:has_time?) && value.has_time?
     if value.respond_to?(:has_array?) && value.has_array?
-      return value.array.values.map { |v| extract_value(v) }
+      return value.array.values.map { |v| extract_value(v) } # Recurse for array elements.
     end
     if value.respond_to?(:has_struct?) && value.has_struct?
+      # Convert AMP struct (object with fixed keys) to Ruby hash.
       return value.struct.entries.each_with_object({}) do |entry, h|
         h[extract_value(entry.key)] = extract_value(entry.value)
       end
     end
     if value.respond_to?(:has_hash_value?) && value.has_hash_value?
+      # Convert AMP hash (object with variable keys) to Ruby hash.
       return value.hash_value.entries.each_with_object({}) do |entry, h|
         h[extract_value(entry.key)] = extract_value(entry.value)
       end
     end
-    nil
+    nil # Default if type not set or recognized.
   end
 
+  # Converts SUT "results" message (Ruby hash) to AMP Label object.
   def sut_message_to_label(message)
-    # This method is specifically for the 'results' (HTTP) response
+    # Specific to "results" HTTP response structure.
     label = PluginAdapter::Api::Label.new
     label.type = :RESPONSE
-    label.label = "results" # Hardcoded for HTTP responses
+    label.label = "results" # Label name fixed for this conversion.
     label.channel = "dynamos_channel"
 
-    # Ensure message is a hash
-    unless message.is_a?(Hash)
-      logger.warn "sut_message_to_label expected a Hash for 'results', got #{message.class}. Creating empty label."
-      return label
+    unless message.is_a?(Hash) # Basic validation.
+      logger.warn "sut_message_to_label expected Hash for 'results', got #{message.class}."
+      return label # Return empty label on invalid input.
     end
 
-    # Specific handling for 'results' structure
+    # Populate params based on expected "results" fields.
     if message.key?('jobId')
       label.parameters << PluginAdapter::Api::Label::Parameter.new(
         name: 'jobId',
@@ -338,8 +363,8 @@ class DynamosHandler < Handler
       )
     end
     if message.key?('responses') && message['responses'].is_a?(Array)
-      # 'responses' for 'results' are expected to be an array of JSON strings by AMP model
-      # value_to_label_param will handle array of strings.
+      # 'responses' for "results" is array of JSON strings for AMP model.
+      # `value_to_label_param` handles arrays of strings.
       label.parameters << PluginAdapter::Api::Label::Parameter.new(
         name: 'responses',
         value: value_to_label_param(message['responses'])
@@ -348,24 +373,27 @@ class DynamosHandler < Handler
     label
   end
 
+  # Recursively converts Ruby objects to AMP Label::Parameter::Value objects (Protobuf).
+  # Used when constructing labels to send to AMP.
   def value_to_label_param(obj)
-    # This method expects pure Ruby types due to dynamos_object_to_hash
     logger.debug "DynamosHandler#value_to_label_param: obj class: #{obj.class}, obj inspect: #{obj.inspect}"
     case obj
     when Hash
+      # Convert Ruby hash to AMP struct (object with fixed keys).
       entries = obj.map do |k, v|
         PluginAdapter::Api::Label::Parameter::Value::Hash::Entry.new(
-          key: PluginAdapter::Api::Label::Parameter::Value.new(string: k.to_s), # Keys are always strings for AMP struct
-          value: value_to_label_param(v) # Recursive call for value
+          key: PluginAdapter::Api::Label::Parameter::Value.new(string: k.to_s), # Struct keys are strings.
+          value: value_to_label_param(v) # Recurse for value.
         )
       end
       PluginAdapter::Api::Label::Parameter::Value.new(
         struct: PluginAdapter::Api::Label::Parameter::Value::Hash.new(entries: entries)
       )
     when Array
+      # Convert Ruby array to AMP array.
       PluginAdapter::Api::Label::Parameter::Value.new(
         array: PluginAdapter::Api::Label::Parameter::Value::Array.new(
-          values: obj.map { |v| value_to_label_param(v) } # Recursive call for each element
+          values: obj.map { |v| value_to_label_param(v) } # Recurse for elements.
         )
       )
     when String
@@ -373,31 +401,36 @@ class DynamosHandler < Handler
     when Integer
       PluginAdapter::Api::Label::Parameter::Value.new(integer: obj)
     when Float
-      PluginAdapter::Api::Label::Parameter::Value.new(decimal: obj) # AMP uses 'decimal' for float/double
+      PluginAdapter::Api::Label::Parameter::Value.new(decimal: obj) # AMP uses 'decimal' for floats.
     when TrueClass, FalseClass
       PluginAdapter::Api::Label::Parameter::Value.new(boolean: obj)
     when NilClass
-      PluginAdapter::Api::Label::Parameter::Value.new # Empty value represents nil
+      PluginAdapter::Api::Label::Parameter::Value.new # Empty Value represents nil.
     else
+      # Fallback for unhandled Ruby types.
       logger.warn "DynamosHandler#value_to_label_param: Unhandled Ruby type #{obj.class}, converting to string: #{obj.inspect}"
-      PluginAdapter::Api::Label::Parameter::Value.new(string: obj.to_s) # Fallback
+      PluginAdapter::Api::Label::Parameter::Value.new(string: obj.to_s)
     end
   end
 
-  # Simple factory methods for PluginAdapter::Api objects.
+  # --- Factory methods for defining labels/params in `supported_labels` ---
 
+  # Creates stimulus label definition.
   def stimulus(name, parameters = {}, channel = 'dynamos_channel')
     label(name, :STIMULUS, parameters, channel)
   end
 
+  # Creates response label definition.
   def response(name, parameters = {}, channel = 'dynamos_channel')
     label(name, :RESPONSE, parameters, channel)
   end
 
+  # Creates parameter definition for `supported_labels`.
   def parameter(name, type, fields = nil)
     PluginAdapter::Api::Label::Parameter.new(name: name, value: build_value(type, fields))
   end
 
+  # Builds dummy AMP Parameter::Value for `supported_labels` definitions.
   def build_value(type, fields_or_element_type = nil)
     case type
     when :integer
@@ -407,19 +440,20 @@ class DynamosHandler < Handler
     when :boolean
       PluginAdapter::Api::Label::Parameter::Value.new(boolean: false)
     when :array
-      # For array, fields_or_element_type specifies the type of elements in the array
-      element_type_symbol = fields_or_element_type.is_a?(Symbol) ? fields_or_element_type : :string # Default to string
-      element_dummy_value = build_value(element_type_symbol) # Recursive call for element type
+      # `fields_or_element_type` is element type for array.
+      element_type_symbol = fields_or_element_type.is_a?(Symbol) ? fields_or_element_type : :string # Default string.
+      element_dummy_value = build_value(element_type_symbol) # Dummy element.
       PluginAdapter::Api::Label::Parameter::Value.new(
         array: PluginAdapter::Api::Label::Parameter::Value::Array.new(
-          values: [element_dummy_value] # AMP expects a dummy value for array elements
+          values: [element_dummy_value] # AMP expects dummy element for type def.
         )
       )
-    when :object # Used for 'struct' in AMP
+    when :object # AMP 'struct' (object with fixed keys).
+      # `fields_or_element_type` is hash defining object's fields.
       entries = (fields_or_element_type || {}).map do |field_name, (field_type_symbol, subfields_hash)|
         PluginAdapter::Api::Label::Parameter::Value::Hash::Entry.new(
-          key: PluginAdapter::Api::Label::Parameter::Value.new(string: field_name),
-          value: build_value(field_type_symbol, subfields_hash) # Recursive call
+          key: PluginAdapter::Api::Label::Parameter::Value.new(string: field_name), # Field name as key.
+          value: build_value(field_type_symbol, subfields_hash) # Recurse for field value.
         )
       end
       PluginAdapter::Api::Label::Parameter::Value.new(
@@ -431,6 +465,7 @@ class DynamosHandler < Handler
     end
   end
 
+  # Generic helper to create label definition structure.
   def label(name, direction, parameters, channel)
     label = PluginAdapter::Api::Label.new
     label.type    = direction
