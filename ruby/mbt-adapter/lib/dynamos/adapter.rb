@@ -10,13 +10,12 @@ class Adapter
   end
 
   def run
-    logger.info 'Starting adapter...'
+    logger.info 'Starting adapter'
     logger.info "Using URL #{@url}"
-    logger.info "Using token #{@token}"
+    # logger.info "Using token #{@token}"
 
     broker_connection = BrokerConnection.new(@url, @token)
     handler = DynamosHandler.new
-    logger.info 'This is a test message...'
 
     adapter_core = AdapterCore.new(@name, broker_connection, handler)
     broker_connection.register_adapter_core(adapter_core)
@@ -24,11 +23,8 @@ class Adapter
 
     adapter_core.start
 
-    logger.info 'Waiting 5 seconds before sending initial request...'
+    logger.info 'Waiting 5 seconds before proceeding'
     sleep 5
 
-    DynamosApi.new
-    # api.stimulate_dynamos
-    # logger.info 'Stimulus has been completed...'
   end
 end

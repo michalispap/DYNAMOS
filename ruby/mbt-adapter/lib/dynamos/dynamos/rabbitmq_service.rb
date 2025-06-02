@@ -12,10 +12,10 @@ class RabbitMQService
     @rabbit_port = '5672'
     @rabbit_dns = 'rabbitmq.core.svc.cluster.local'
     @queue_name = queue_name
-    @connection = nil # Bunny RabbitMQ connection.
-    @channel = nil    # Bunny RabbitMQ channel.
-    @queue = nil      # Bunny RabbitMQ queue.
-    @amp_handler = amp_handler # To pass messages to AMP.
+    @connection = nil
+    @channel = nil
+    @queue = nil
+    @amp_handler = amp_handler
   end
 
   # Registers a callback for when RabbitMQ connection is established.
@@ -48,8 +48,8 @@ class RabbitMQService
     # 'block: false' = non-blocking subscription.
     @queue.subscribe(block: false) do |_delivery_info, properties, body|
       # body is expected to be a JSON string (message envelope).
-      logger.info "Received RabbitMQ properties #{properties}"
-      logger.info "Received RabbitMQ message: #{body}"
+      logger.info "*** Received RabbitMQ properties #{properties}"
+      logger.info "*** Received RabbitMQ message: #{body}"
 
       parsed_data = parse_message(body) # Handles JSON & Protobuf decoding.
 

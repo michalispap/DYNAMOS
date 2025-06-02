@@ -8,7 +8,7 @@ class Handler
   attr_accessor :configuration
 
   # @param [AdapterCore] adapter_core The adapter core to notify of responses
-  #     and errors of the SUT via callbacks.
+  # and errors of the SUT via callbacks.
   def register_adapter_core(adapter_core)
     @adapter_core = adapter_core
     @configuration = default_configuration
@@ -28,8 +28,8 @@ class Handler
   def reset
     raise NoMethodError, ABSTRACT_METHOD
   end
-  # Stimulate the SUT and return the physical label.
 
+  # Stimulate the SUT and return the physical label.
   # @param [PluginAdapter::Api:Label] stimulus to inject into the SUT.
   def stimulate(_label)
     raise NoMethodError, ABSTRACT_METHOD

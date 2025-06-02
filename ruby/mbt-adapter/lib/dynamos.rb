@@ -25,6 +25,7 @@ require 'message_pb'
 require 'microserviceCommunication_pb'
 require 'rabbitMQ_pb'
 $LOAD_PATH.pop
+
 # ----- Logging
 
 # Step 1: Create a custom layout for the log format
@@ -37,7 +38,7 @@ appender = Logging::Appenders::Stdout.new('root', layout: layout)
 Logging.logger.root.appenders = appender
 
 # Step 4: Set the log level
-LOG_LEVEL = :debug # Options are :info, :debug, :warn, :error
+LOG_LEVEL = :info # Options are :info, :debug, :warn, :error
 Logging.logger.root.level = LOG_LEVEL
 
 # Step 5: Include the Logging module globally in the application

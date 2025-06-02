@@ -157,7 +157,7 @@ class AdapterCore
   end
 
   # Send response to AMP (callback for Handler).
-  # We do not check whether the label is actual a response.
+  # We do not check whether the label is actually a response.
   # @param [String] physical_label as observed at the SUT
   # @param [Time] timestamp when the response was observed
   def send_response(label, physical_label, timestamp)

@@ -5,7 +5,7 @@
 # Handles AMP lifecycle, SUT interactions (HTTP & RabbitMQ), and defines adapter interface.
 class DynamosHandler < Handler
   def initialize
-    @connection = nil # Manages SUT connection (via RabbitMQ).
+    @connection = nil # Manages SUT connection (RabbitMQ).
     super
   end
 
@@ -22,14 +22,14 @@ class DynamosHandler < Handler
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
-  DYNAMOS_URL = 'ws://127.0.0.1:3001' # Default SUT URL (not directly used for RabbitMQ).
+  DYNAMOS_URL = 'ws://127.0.0.1:3001' # SUT URL.
 
   # Prepares adapter for test session: connects to SUT (RabbitMQ).
   def start
     return unless @connection.nil?
 
     logger.info 'Starting. Trying to connect to the SUT.'
-    @connection = DynamosConnection.new(self) # Wraps RabbitMQService.
+    @connection = DynamosConnection.new(self)
     @connection.connect
     # DynamosConnection's on_connected callback signals AMP when ready.
   end
@@ -47,7 +47,7 @@ class DynamosHandler < Handler
   def reset
     logger.info 'Reset the connection to the SUT.'
     if @connection
-      send_reset_to_sut # Send RESET to SUT via RabbitMQ.
+      send_reset_to_sut # Send RESET to SUT (RabbitMQ).
       send_ready_to_amp # Signal AMP adapter is ready.
     else
       # If no connection, perform full stop and start.
@@ -102,7 +102,7 @@ class DynamosHandler < Handler
   def supported_labels
     labels = []
 
-    # Reusable field definitions for complex AMP label parameters.
+    # Reusable field definitions for certain AMP label parameters.
     user_fields = {
       'id' => [:string, nil],
       'userName' => [:string, nil]

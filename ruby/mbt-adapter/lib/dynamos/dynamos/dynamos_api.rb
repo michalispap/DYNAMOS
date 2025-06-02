@@ -1,4 +1,4 @@
-# Handles HTTP communication with the DYNAMOS API gateway.
+# Handles HTTP communication with the DYNAMOS API Gateway.
 class DynamosApi
   # @param api_gateway_url [String] Base URL of the DYNAMOS API.
   def initialize(api_gateway_url = 'http://api-gateway.api-gateway.svc.cluster.local:8080/api/v1')

@@ -1,7 +1,7 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# Monkey-patch OpenSSL::SSL::SSLSocket to add an 'url' attribute.
+# Add 'url' attribute.
 # Required by WebSocket::Driver client for SSL (not directly used by this class).
 module OpenSSL
   module SSL
@@ -11,17 +11,16 @@ module OpenSSL
   end
 end
 
-# Manages the connection to the DYNAMOS SUT via RabbitMQ.
-# Wraps RabbitMQService for SUT communication.
+# Manages the connection to the DYNAMOS SUT.
 class DynamosConnection
   def initialize(handler)
     @handler = handler # The main adapter handler (DynamosHandler).
-    @socket  = nil # Not used for RabbitMQ.
-    @driver  = nil # Not used for RabbitMQ.
+    @socket  = nil
+    @driver  = nil
     @queue_handler = nil # RabbitMQService instance.
   end
 
-  # Establishes SUT connection via RabbitMQ.
+  # Establishes SUT connection (RabbitMQ).
   # Initializes RabbitMQService and sets a callback for when connected.
   def connect
     @queue_handler = RabbitMQService.new(@handler)
