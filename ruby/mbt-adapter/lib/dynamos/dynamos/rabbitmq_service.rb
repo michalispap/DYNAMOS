@@ -183,6 +183,11 @@ class RabbitMQService
       obj.map { |item| dynamos_object_to_hash(item) } # Recurse for each element.
     when Google::Protobuf::Map # Protobuf map/dictionary.
       obj.to_h.transform_values { |v_item| dynamos_object_to_hash(v_item) } # Recurse for values.
+    when Array
+      obj.map { |item| dynamos_object_to_hash(item) }
+    when Hash
+      logger.debug "dynamos_object_to_hash: Received a Hash: #{obj.inspect}"
+      obj.transform_values { |v| dynamos_object_to_hash(v) }
     when String, Numeric, TrueClass, FalseClass # Primitive types.
       obj
     when NilClass

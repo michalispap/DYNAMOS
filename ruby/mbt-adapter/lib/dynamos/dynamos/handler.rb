@@ -71,7 +71,7 @@ class DynamosHandler < Handler
     http_status_code = http_call_result[:code]
     response_body_str = http_call_result[:body_str]
 
-    # Report HTTP status code to AMP immediately.
+    # Always report HTTP status code to AMP, even for network/client errors.
     status_label = PluginAdapter::Api::Label.new(
       type: :RESPONSE,
       label: "http_response_status",
@@ -84,6 +84,12 @@ class DynamosHandler < Handler
     status_physical_label = { code: http_status_code }.to_json
     @adapter_core.send_response(status_label, status_physical_label, Time.now)
     logger.info "Sent 'http_response_status' (code: #{http_status_code}) to AMP."
+
+    if http_status_code == 0
+      logger.warn "HTTP request failed due to network/client error. Code 0 sent to AMP."
+      # Do not attempt to parse results if network error.
+      return
+    end
 
     # Conditionally process SUT's HTTP response body for "results".
     if http_status_code >= 200 && http_status_code < 300 # Check for 2xx success.

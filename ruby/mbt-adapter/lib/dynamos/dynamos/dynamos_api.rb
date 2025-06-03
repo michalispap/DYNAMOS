@@ -9,7 +9,7 @@ class DynamosApi
   # This is the primary method for stimulating the SUT via HTTP.
   # @param request_body [String] JSON request body.
   # @param endpoint [String] API endpoint (e.g., 'requestApproval').
-  # @return [Hash] Contains :code (Integer HTTP status) and :body_str (String or nil).
+  # @return [Hash] Contains :code (Integer HTTP status or 0 if network/client error) and :body_str (String or nil).
   def stimulate_dynamos(request_body, endpoint = 'requestApproval')
     uri = URI.parse("#{@api_gateway_url}/#{endpoint}")
     request_properties = { 'Content-Type' => 'application/json' }
@@ -22,8 +22,8 @@ class DynamosApi
       { code: response.code.to_i, body_str: response.body }
     rescue StandardError => e # Catch network or HTTP errors.
       logger.error("Error during HTTP POST to #{uri}: #{e.class.name} - #{e.message}")
-      # Return 599 for client-side/network errors, and a nil body.
-      { code: 599, body_str: nil }
+      # Return 0 for client-side/network errors, and a nil body.
+      { code: 0, body_str: nil }
     end
   end
 
@@ -35,8 +35,8 @@ class DynamosApi
     # Return nil if body is empty or not parsable.
     return nil if body_str.nil? || body_str.strip.empty?
     parsed = JSON.parse(body_str)
-    # Check for essential "results" keys and that "responses" is a non-empty array.
-    if parsed.key?("jobId") && parsed.key?("responses") && parsed["responses"].is_a?(Array) && parsed["responses"].any? { |r| !r.to_s.strip.empty? }
+    # Check for essential "results" keys and that "responses" is an array.
+    if parsed.key?("jobId") && parsed.key?("responses") && parsed["responses"].is_a?(Array)
       return parsed
     else
       return nil # Body does not match expected "results" structure.
@@ -47,4 +47,3 @@ class DynamosApi
   end
 
 end
-
