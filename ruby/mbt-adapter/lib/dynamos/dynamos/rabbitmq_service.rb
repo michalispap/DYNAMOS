@@ -180,7 +180,11 @@ class RabbitMQService
       obj.class.descriptor.each do |field_descriptor|
         field_name = field_descriptor.name
         value = obj.send(field_name.to_sym)
-        result[field_name] = dynamos_object_to_hash(value) # Recurse for field value.
+        if field_name == 'data' && !value.nil?
+          result[field_name] = "too large"
+        else
+          result[field_name] = dynamos_object_to_hash(value) # Recurse for field value.
+        end
       end
       result
     when Google::Protobuf::RepeatedField # Protobuf array.
