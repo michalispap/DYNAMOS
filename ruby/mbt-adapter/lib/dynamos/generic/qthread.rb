@@ -11,7 +11,8 @@ class QThread
 
   # Add item to the queue.
   def put(item)
-    logger.debug "Adding item to the queue: #{item}"
+    # logger.debug "Adding item to the queue: #{item}"
+    logger.debug "Adding item to the queue."
     @queue << item
   end
   alias << put
@@ -28,7 +29,8 @@ class QThread
   def worker
     while true
       item = @queue.pop
-      logger.debug "Processing item from the queue: #{item}"
+      # logger.debug "Processing item from the queue: #{item}"
+      logger.debug "Processing item from the queue."
       @process_item_block&.call(item)
     end
   end

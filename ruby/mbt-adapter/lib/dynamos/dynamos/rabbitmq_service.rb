@@ -25,7 +25,7 @@ class RabbitMQService
 
   # Connects to RabbitMQ, creates channel, and declares queue.
   def connect
-    logger.debug "Attempting to connect as user #{@amq_user} with password #{@amq_password} on  host #{@rabbit_dns} with port #{@rabbit_port}."
+    logger.debug "Attempting to connect as user: #{@amq_user} with password: #{@amq_password} on host #{@rabbit_dns} with port #{@rabbit_port}."
     @connection = Bunny.new(host: @rabbit_dns, port: @rabbit_port, username: @amq_user,
                             password: @amq_password)
     logger.debug "Starting connection..."
