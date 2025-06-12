@@ -16,6 +16,7 @@ class Adapter
 
     broker_connection = BrokerConnection.new(@url, @token)
     handler = DynamosHandler.new
+    # handler.start
 
     adapter_core = AdapterCore.new(@name, broker_connection, handler)
     broker_connection.register_adapter_core(adapter_core)

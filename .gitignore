@@ -44,3 +44,5 @@ datasets/*.csv
 adapter_logs.txt
 chain_logs.txt
 *.aml
+
+python/venv

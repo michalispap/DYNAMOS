@@ -268,5 +268,5 @@ func getMicroserviceTag(msName string) string {
 		return tag
 	}
 
-	return "main"
+	return "mbt_adapter_service"
 }

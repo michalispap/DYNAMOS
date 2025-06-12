@@ -26,6 +26,7 @@ class DynamosHandler < Handler
 
   # Prepares adapter for test session: connects to SUT (RabbitMQ).
   def start
+    logger.debug "Starting connection. Connection is nil? -> #{@connection.nil?}"
     return unless @connection.nil?
 
     logger.info 'Starting. Trying to connect to the SUT.'
