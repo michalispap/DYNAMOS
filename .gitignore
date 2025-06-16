@@ -41,9 +41,6 @@ datasets/*.csv
 
 *.byebug_history
 
-adapter_logs.log
-adapter_logs_latest.log
-chain_logs.log
-*.aml
+adapter.log
 
 python/venv
