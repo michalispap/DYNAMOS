@@ -165,7 +165,8 @@ class DynamosHandler < Handler
         parameter('error', :string) # Simple string error.
       ],
       'microserviceCommunication' => [
-        parameter('return_address', :string)
+        parameter('return_address', :string),
+        parameter('result', :string)
       ],
       'http_response_status' => [
         parameter('code', :integer)
@@ -249,6 +250,7 @@ class DynamosHandler < Handler
     when 'microserviceCommunication'
       # Dig into nested structure for 'return_address'.
       selected_params['return_address'] = payload.dig('request_metadata', 'return_address')
+      selected_params['result'] = payload['result'] if payload.key?('result')
     else
       # If type not explicitly handled, don't send to AMP.
       logger.warn "DynamosHandler: No parameter selection for RabbitMQ type '#{original_type}'. Not sending to AMP."
