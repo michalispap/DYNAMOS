@@ -119,6 +119,17 @@ func deployJob(ctx context.Context, msChain []mschain.MicroserviceMetadata, jobN
 				{Name: "SIDECAR_PORT", Value: strconv.Itoa(firstPortMicroservice - 1)},
 				{Name: "OC_AGENT_HOST", Value: tracingHost},
 				{Name: "NR_OF_DATA_PROVIDERS", Value: strconv.Itoa(nr_of_data_providers)},
+				{Name: "AMQ_USER", Value: rabbitMqUser},
+                {Name: "AMQ_PASSWORD",
+                 ValueFrom: &v1.EnvVarSource{
+                  SecretKeyRef: &v1.SecretKeySelector{
+                   LocalObjectReference: v1.LocalObjectReference{
+                    Name: "rabbit",
+                   },
+                   Key: "password",
+                  },
+                 },
+                },
 			},
 			// Add additional container configuration here as needed
 		}
@@ -169,7 +180,8 @@ func addSidecar() v1.Container {
 			{Name: "TEMPORARY_JOB", Value: "true"},
 			{Name: "AMQ_USER", Value: rabbitMqUser},
 			{Name: "OC_AGENT_HOST", Value: tracingHost},
-			{Name: "AMQ_PASSWORD",
+			{
+				Name: "AMQ_PASSWORD",
 				ValueFrom: &v1.EnvVarSource{
 					SecretKeyRef: &v1.SecretKeySelector{
 						LocalObjectReference: v1.LocalObjectReference{
@@ -178,7 +190,8 @@ func addSidecar() v1.Container {
 						Key: "password",
 					},
 				},
-			}},
+			},
+		},
 		// Add additional container configuration here as needed
 	}
 }
@@ -205,7 +218,7 @@ func getRequiredMicroservices(microserviceMetada *[]mschain.MicroserviceMetadata
 }
 
 func getOptionalMicroservices(microserviceMetada *[]mschain.MicroserviceMetadata, request *mschain.RequestType, role string, requestType string, options map[string]bool) error {
-	//TODO: include enforced microservices
+	// TODO: include enforced microservices
 	logger.Debug("Start getOptionalMicroservices")
 	logger.Sugar().Debug(len(request.OptionalServices))
 
@@ -237,6 +250,7 @@ func getOptionalMicroservices(microserviceMetada *[]mschain.MicroserviceMetadata
 
 	return nil
 }
+
 func RequestTypeMicroservices(requestType string) (mschain.RequestType, error) {
 	var request mschain.RequestType
 	_, err := etcd.GetAndUnmarshalJSON(etcdClient, fmt.Sprintf("/requestTypes/%s", requestType), &request)

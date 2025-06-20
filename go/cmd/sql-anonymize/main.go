@@ -56,7 +56,8 @@ func messageHandler(config *msinit.Configuration) func(ctx context.Context, msCo
 			logger.Sugar().Errorf("Unknown RequestType type: %v", msComm.RequestType)
 		}
 
-		config.NextClient.SendData(ctx, msComm)
+		lib.SendToTestQueue(ctx, "anonymizeFinished", msComm)
+		lib.SendToTestQueue(ctx, "anonymizeFinished", msComm)
 
 		close(config.StopMicroservice)
 		return nil

@@ -19,6 +19,9 @@ class DynamosHandler < Handler
     requestApprovalResponse
     microserviceCommunication
     http_response_status
+    anonymizeFinished
+    algorithmFinished
+    aggregateFinished
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
@@ -168,6 +171,9 @@ class DynamosHandler < Handler
         parameter('return_address', :string),
         parameter('result', :string)
       ],
+      'anonymizeFinished' => [],
+      'algorithmFinished' => [],
+      'aggregateFinished' => [],
       'http_response_status' => [
         parameter('code', :integer)
       ]
@@ -251,6 +257,8 @@ class DynamosHandler < Handler
       # Dig into nested structure for 'return_address'.
       selected_params['return_address'] = payload.dig('request_metadata', 'return_address')
       selected_params['result'] = payload['result'] if payload.key?('result')
+    when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished'
+      # These are notifications that a step is finished. No parameters needed.
     else
       # If type not explicitly handled, don't send to AMP.
       logger.warn "DynamosHandler: No parameter selection for RabbitMQ type '#{original_type}'. Not sending to AMP."

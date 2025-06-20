@@ -97,11 +97,11 @@ class RabbitMQService
   def parse_message(json_message)
     begin
       parsed_envelope = JSON.parse(json_message)
-      type = parsed_envelope['Type']         # Protobuf message type.
-      base64_body = parsed_envelope['Body'] # Base64 encoded Protobuf.
+      type = parsed_envelope['type']         # Protobuf message type.
+      base64_body = parsed_envelope['body'] # Base64 encoded Protobuf.
 
       unless type && base64_body # Ensure essential fields.
-        logger.error "RabbitMQ message missing 'Type' or 'Body': #{json_message}"
+        logger.error "RabbitMQ message missing 'type' or 'body': #{json_message}"
         return { type: nil, payload: nil, raw_json: json_message }
       end
 
@@ -144,11 +144,16 @@ class RabbitMQService
   def klass_from_type(type)
     # Converts type string (e.g., "requestApproval") to Ruby class name ("RequestApproval").
     # Handles initialisms like "SQLDataRequest" -> "SqlDataRequest".
-    class_name = type.gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
-                     .gsub(/([a-z\d])([A-Z])/, '\1_\2')
-                     .split('_')
-                     .map(&:capitalize)
-                     .join
+    class_name = case type
+                 when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished'
+                   'MicroserviceCommunication'
+                 else
+                   type.gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
+                       .gsub(/([a-z\d])([A-Z])/, '\1_\2')
+                       .split('_')
+                       .map(&:capitalize)
+                       .join
+                 end
     # Check if class is defined under Dynamos module. 'false' = don't search ancestors.
     if Dynamos.const_defined?(class_name, false)
       Dynamos.const_get(class_name, false)

@@ -57,6 +57,7 @@ func messageHandler(config *msinit.Configuration) func(ctx context.Context, msCo
 		}
 
 		config.NextClient.SendData(ctx, msComm)
+		lib.SendToTestQueue(ctx, "algorithmFinished", msComm)
 
 		close(config.StopMicroservice)
 		return nil
