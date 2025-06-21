@@ -145,7 +145,7 @@ class RabbitMQService
     # Converts type string (e.g., "requestApproval") to Ruby class name ("RequestApproval").
     # Handles initialisms like "SQLDataRequest" -> "SqlDataRequest".
     class_name = case type
-                 when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished'
+                 when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished', 'queryFinished'
                    'MicroserviceCommunication'
                  else
                    type.gsub(/([A-Z]+)([A-Z][a-z])/, '\1_\2')
@@ -211,4 +211,3 @@ class RabbitMQService
     end
   end
 end
-

@@ -22,6 +22,7 @@ class DynamosHandler < Handler
     anonymizeFinished
     algorithmFinished
     aggregateFinished
+    queryFinished
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
@@ -174,6 +175,7 @@ class DynamosHandler < Handler
       'anonymizeFinished' => [],
       'algorithmFinished' => [],
       'aggregateFinished' => [],
+      'queryFinished' => [],
       'http_response_status' => [
         parameter('code', :integer)
       ]
@@ -257,7 +259,7 @@ class DynamosHandler < Handler
       # Dig into nested structure for 'return_address'.
       selected_params['return_address'] = payload.dig('request_metadata', 'return_address')
       selected_params['result'] = payload['result'] if payload.key?('result')
-    when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished'
+    when 'anonymizeFinished', 'algorithmFinished', 'aggregateFinished', 'queryFinished'
       # These are notifications that a step is finished. No parameters needed.
     else
       # If type not explicitly handled, don't send to AMP.
