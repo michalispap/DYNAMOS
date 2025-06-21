@@ -104,7 +104,7 @@ func requestHandler() http.HandlerFunc {
 
 			logger.Sugar().Infof("Data Prepared jsonData: %s", dataRequestJson)
 
-			responses := sendDataToAuthProviders(dataRequestJson, msg.AuthorizedProviders, apiReqApproval.Type, msg.JobId)
+			responses := sendDataToAuthProviders(ctx, dataRequestJson, msg.AuthorizedProviders, apiReqApproval.Type, msg.JobId)
 			w.WriteHeader(http.StatusOK)
 			w.Write(responses)
 			return
@@ -118,7 +118,7 @@ func requestHandler() http.HandlerFunc {
 
 // Use the data request that was previously built and send it to the authorised providers
 // acquired from the request approval
-func sendDataToAuthProviders(dataRequest []byte, authorizedProviders map[string]string, msgType string, jobId string) []byte {
+func sendDataToAuthProviders(ctx context.Context, dataRequest []byte, authorizedProviders map[string]string, msgType string, jobId string) []byte {
 	// Setup the wait group for async data requests
 	var wg sync.WaitGroup
 	var responses []string
@@ -136,6 +136,12 @@ func sendDataToAuthProviders(dataRequest []byte, authorizedProviders map[string]
 
 		// Async call send the data
 		go func() {
+			if msgType == "sqlDataRequest" {
+        		var sqlReq pb.SqlDataRequest
+        		if json.Unmarshal(dataRequest, &sqlReq) == nil {
+        			lib.SendToTestQueue(ctx, msgType, &sqlReq)
+        		}
+        	}
 			respData, err := sendData(endpoint, dataRequest)
 			if err != nil {
 				logger.Sugar().Errorf("Error sending data, %v", err)

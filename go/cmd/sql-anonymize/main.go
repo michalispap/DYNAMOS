@@ -57,7 +57,7 @@ func messageHandler(config *msinit.Configuration) func(ctx context.Context, msCo
 		}
 
 		lib.SendToTestQueue(ctx, "anonymizeFinished", msComm)
-		lib.SendToTestQueue(ctx, "anonymizeFinished", msComm)
+		config.NextClient.SendData(ctx, msComm)
 
 		close(config.StopMicroservice)
 		return nil

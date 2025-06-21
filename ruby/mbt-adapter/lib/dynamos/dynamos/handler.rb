@@ -23,6 +23,7 @@ class DynamosHandler < Handler
     algorithmFinished
     aggregateFinished
     queryFinished
+    sqlDataRequest
   ].freeze
   private_constant :STIMULI, :RESPONSES
 
@@ -151,6 +152,9 @@ class DynamosHandler < Handler
         parameter('jobId', :string),
         parameter('responses', :array, :string) # Array of JSON strings.
       ],
+      'sqlDataRequest' => [
+        parameter('query', :string)
+      ],
       'requestApproval' => [
         parameter('data_providers', :array, :string),
         parameter('options', :object, data_request_options_fields)
@@ -240,6 +244,8 @@ class DynamosHandler < Handler
     when 'requestApproval'
       selected_params['data_providers'] = payload['data_providers'] if payload.key?('data_providers')
       selected_params['options'] = payload['options'] if payload.key?('options')
+    when 'sqlDataRequest'
+      selected_params['query'] = payload['query'] if payload.key?('query')
     when 'validationResponse'
       # 'valid_dataproviders' might be hash (keys are names) or array.
       if payload.key?('valid_dataproviders') && payload['valid_dataproviders'].is_a?(Hash)

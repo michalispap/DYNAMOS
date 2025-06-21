@@ -56,8 +56,8 @@ func messageHandler(config *msinit.Configuration) func(ctx context.Context, msCo
 			logger.Sugar().Errorf("Unknown RequestType type: %v", msComm.RequestType)
 		}
 
-		config.NextClient.SendData(ctx, msComm)
 		lib.SendToTestQueue(ctx, "algorithmFinished", msComm)
+		config.NextClient.SendData(ctx, msComm)
 
 		close(config.StopMicroservice)
 		return nil
