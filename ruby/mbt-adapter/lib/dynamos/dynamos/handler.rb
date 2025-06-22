@@ -10,7 +10,7 @@ class DynamosHandler < Handler
   end
 
   # Supported stimulus and response label names for AMP.
-  STIMULI = %w[sql_data_request].freeze
+  STIMULI = %w[sql_data_request switch_archetype].freeze
   RESPONSES = %w[
     results
     requestApproval
@@ -65,15 +65,30 @@ class DynamosHandler < Handler
   # Handles stimulus from AMP: sends request to SUT.
   def stimulate(label)
     logger.info "Executing stimulus at the SUT: #{label.label}"
-    sut_message = label_to_sut_message(label) # Convert AMP Label to SUT JSON.
-    logger.info "Generated SUT message: #{sut_message}"
-
-    # Confirm to AMP that stimulus is being processed.
-    @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
-
-    # --- SUT HTTP Interaction ---
     api = DynamosApi.new
-    http_call_result = api.stimulate_dynamos(sut_message) # HTTP POST to SUT.
+    http_call_result = nil
+
+    case label.label
+    when 'sql_data_request'
+      sut_message = label_to_sut_message(label) # Convert AMP Label to SUT JSON.
+      logger.info "Generated SUT message: #{sut_message}"
+
+      # Confirm to AMP that stimulus is being processed.
+      @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
+
+      # --- SUT HTTP Interaction ---
+      http_call_result = api.stimulate_dynamos(sut_message) # HTTP POST to SUT.
+    when 'switch_archetype'
+      sut_message = label_to_sut_message(label)
+      logger.info "Generated SUT message: #{sut_message}"
+      # The physical label is the SUT message.
+      @adapter_core.send_stimulus_confirmation(label, sut_message, Time.now)
+      http_call_result = api.switch_archetype(sut_message) # HTTP PUT to SUT.
+    else
+      logger.error "Unknown stimulus: #{label.label}"
+      return
+    end
+
     http_status_code = http_call_result[:code]
     response_body_str = http_call_result[:body_str]
 
@@ -139,6 +154,9 @@ class DynamosHandler < Handler
         parameter('user', :object, user_fields),
         parameter('dataProviders', :array, :string), # Array of strings.
         parameter('data_request', :object, data_request_fields)
+      ],
+      'switch_archetype' => [
+        parameter('weight', :integer)
       ]
     }
     STIMULI.each do |name|
@@ -319,10 +337,8 @@ class DynamosHandler < Handler
     # Extract all AMP Label parameters into a Ruby hash.
     params_hash = label.parameters.map { |param| [param.name, extract_value(param.value)] }.to_h
 
-    sut_top_level_type = nil
-    sut_payload = {}
-
-    if label.label == 'sql_data_request'
+    case label.label
+    when 'sql_data_request'
       # Use 'request_type' param from AMP for top-level 'type' in SUT JSON.
       sut_top_level_type = params_hash.delete('request_type')
       # Fallback if 'request_type' is missing in model.
@@ -332,14 +348,22 @@ class DynamosHandler < Handler
       end
       # Remaining params (user, dataProviders, data_request) form the payload.
       sut_payload = params_hash
+      { type: sut_top_level_type }.merge(sut_payload).to_json
+    when 'switch_archetype'
+      {
+        name: 'computeToData',
+        computeProvider: 'dataProvider',
+        resultRecipient: 'requestor',
+        weight: params_hash['weight']
+      }.to_json
     else
       # Fallback for other (currently undefined) stimuli.
       sut_top_level_type = label.label
       sut_payload = params_hash
+      # Construct final SUT message:
+      # e.g., { "type": "sqlDataRequest", "user": {...}, ... }
+      { type: sut_top_level_type }.merge(sut_payload).to_json
     end
-    # Construct final SUT message:
-    # e.g., { "type": "sqlDataRequest", "user": {...}, ... }
-    { type: sut_top_level_type }.merge(sut_payload).to_json
   end
 
   # Recursively extracts Ruby values from AMP Label::Parameter::Value objects.

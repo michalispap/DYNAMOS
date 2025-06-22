@@ -27,6 +27,28 @@ class DynamosApi
     end
   end
 
+  # Sends a PUT request to switch the archetype.
+  # @param request_body [String] The JSON request body.
+  # @return [Hash] Contains :code (Integer HTTP status or 0 if network/client error) and :body_str (String or nil).
+  def switch_archetype(request_body)
+    orchestrator_url = 'http://orchestrator.orchestrator.svc.cluster.local:8080/api/v1'
+    uri = URI.parse("#{orchestrator_url}/archetypes/agreements")
+
+    logger.info("Switching archetype at URL: #{uri}")
+    logger.info("Request body: #{request_body}")
+
+    begin
+      http = Net::HTTP.new(uri.host, uri.port)
+      request = Net::HTTP::Put.new(uri.path, 'Content-Type' => 'application/json')
+      request.body = request_body
+      response = http.request(request)
+      { code: response.code.to_i, body_str: response.body }
+    rescue StandardError => e
+      logger.error("Error during HTTP PUT to #{uri}: #{e.class.name} - #{e.message}")
+      { code: 0, body_str: nil }
+    end
+  end
+
   # Parses the HTTP response body (JSON) for a "results" structure.
   # Specifically looks for "jobId" and "responses" keys.
   # @param body_str [String, nil] Raw HTTP response body.
