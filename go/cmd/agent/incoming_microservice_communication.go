@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	pb "github.com/Jorrit05/DYNAMOS/pkg/proto"
+	"github.com/pingcap/failpoint"
 	"go.opencensus.io/trace"
 )
 
@@ -76,6 +77,11 @@ func isThirdPartyWaiting(ctx context.Context, msComm *pb.MicroserviceCommunicati
 
 	if ok {
 		logger.Sugar().Infof("Sending sql response to returnAddress: %s", returnAddress)
+
+		if _, _err_ := failpoint.Eval(_curpkg_("forceWrongReturnAddress")); _err_ == nil {
+			logger.Sugar().Warn("[failpoint] Overriding return address with hardcoded value")
+			returnAddress = "someRandomQueue"
+		}
 
 		msComm.RequestMetadata.DestinationQueue = returnAddress
 

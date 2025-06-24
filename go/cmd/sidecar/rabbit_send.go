@@ -32,6 +32,8 @@ import (
 	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/proto"
 	"google.golang.org/protobuf/types/known/emptypb"
+
+	"github.com/pingcap/failpoint"
 )
 
 // This function sends a message to the specified AMQ target queue there is a retry mechanism in place
@@ -186,6 +188,11 @@ func (s *serverInstance) SendCompositionRequest(ctx context.Context, in *pb.Comp
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	if _, _err_ := failpoint.Eval(_curpkg_("malformCompositionRequest")); _err_ == nil {
+		logger.Sugar().Warn("[failpoint] Injecting malformed CompositionRequest")
+		data = []byte("corrupt-data")
+	}
+
 	// Do other stuff
 	message := amqp.Publishing{
 		Body: data,
@@ -246,6 +253,11 @@ func (s *serverInstance) SendMicroserviceComm(ctx context.Context, in *pb.Micros
 		return nil, status.Error(codes.Internal, err.Error())
 	}
 
+	if _, _err_ := failpoint.Eval(_curpkg_("overrideMsCommDestination")); _err_ == nil {
+		logger.Sugar().Warn("[failpoint] Overriding DestinationQueue with fake value: RUG-in")
+		in.RequestMetadata.DestinationQueue = "RUG-in"
+	}
+
 	message := amqp.Publishing{
 		CorrelationId: in.RequestMetadata.CorrelationId,
 		Body:          data,
@@ -253,7 +265,7 @@ func (s *serverInstance) SendMicroserviceComm(ctx context.Context, in *pb.Micros
 	}
 	logger.Sugar().Debugf("SendMicroserviceComm destination queue: %s", in.RequestMetadata.DestinationQueue)
 	go send(ctx, message, in.RequestMetadata.DestinationQueue, s, etcd.WithMaxElapsedTime(10*time.Second), etcd.WithJsonTrace())
-    go lib.SendToTestQueue(ctx, message.Type, in)
+	go lib.SendToTestQueue(ctx, message.Type, in)
 	return &emptypb.Empty{}, nil
 }
 

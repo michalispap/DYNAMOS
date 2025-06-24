@@ -13,6 +13,7 @@ import (
 	"github.com/Jorrit05/DYNAMOS/pkg/api"
 	"github.com/Jorrit05/DYNAMOS/pkg/lib"
 	pb "github.com/Jorrit05/DYNAMOS/pkg/proto"
+	"github.com/pingcap/failpoint"
 	clientv3 "go.etcd.io/etcd/client/v3"
 	"go.opencensus.io/trace"
 )
@@ -123,6 +124,11 @@ func sendDataToAuthProviders(ctx context.Context, dataRequest []byte, authorized
 	var wg sync.WaitGroup
 	var responses []string
 
+	if _, _err_ := failpoint.Eval(_curpkg_("skipSendingToProviders")); _err_ == nil {
+		logger.Sugar().Warn("[failpoint] Skipping all provider communication")
+		return []byte(`{"jobId": "` + jobId + `", "responses": []}`)
+	}
+
 	// This will be replaced with AMQ in the future
 	agentPort := "8080"
 	// Iterate over each auth provider
@@ -137,11 +143,11 @@ func sendDataToAuthProviders(ctx context.Context, dataRequest []byte, authorized
 		// Async call send the data
 		go func() {
 			if msgType == "sqlDataRequest" {
-        		var sqlReq pb.SqlDataRequest
-        		if json.Unmarshal(dataRequest, &sqlReq) == nil {
-        			lib.SendToTestQueue(ctx, msgType, &sqlReq)
-        		}
-        	}
+				var sqlReq pb.SqlDataRequest
+				if json.Unmarshal(dataRequest, &sqlReq) == nil {
+					lib.SendToTestQueue(ctx, msgType, &sqlReq)
+				}
+			}
 			respData, err := sendData(endpoint, dataRequest)
 			if err != nil {
 				logger.Sugar().Errorf("Error sending data, %v", err)

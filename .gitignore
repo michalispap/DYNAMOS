@@ -44,3 +44,5 @@ datasets/*.csv
 adapter.log
 
 python/venv
+
+*.go__failpoint_stash__

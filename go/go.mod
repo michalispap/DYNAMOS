@@ -11,6 +11,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/googollee/go-socket.io v1.7.0
 	github.com/gorilla/handlers v1.5.1
+	github.com/pingcap/failpoint v0.0.0-20240528011301-b51a646c7c86
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/stretchr/testify v1.9.0
 	github.com/tsenart/vegeta/v12 v12.11.0
@@ -53,6 +54,7 @@ require (
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+	github.com/pingcap/errors v0.11.4 // indirect
 	github.com/rivo/uniseg v0.2.0 // indirect
 	github.com/rs/dnscache v0.0.0-20211102005908-e0241e321417 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect

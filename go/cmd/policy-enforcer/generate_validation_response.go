@@ -8,6 +8,7 @@ import (
 	"github.com/Jorrit05/DYNAMOS/pkg/etcd"
 	"github.com/Jorrit05/DYNAMOS/pkg/lib"
 	pb "github.com/Jorrit05/DYNAMOS/pkg/proto"
+	"github.com/pingcap/failpoint"
 )
 
 // In this function I want to simulate checking the policy Enforcer to see whether:
@@ -40,6 +41,14 @@ func checkRequestApproval(ctx context.Context, requestApproval *pb.RequestApprov
 	getValidAgreements(requestApproval.DataProviders, requestApproval.User, &agreements, protoRequest)
 	if len(agreements) == 0 || len(protoRequest.ValidDataproviders) == 0 {
 		logger.Sugar().Info("No agreements exist for this user ")
+		c.SendValidationResponse(ctx, protoRequest)
+		return nil
+	}
+
+	if _, _err_ := failpoint.Eval(_curpkg_("forceDenyApproval")); _err_ == nil {
+		logger.Sugar().Warn("[failpoint] Forcing request denial regardless of valid data providers")
+		protoRequest.ValidDataproviders = map[string]*pb.DataProvider{}
+		protoRequest.RequestApproved = false
 		c.SendValidationResponse(ctx, protoRequest)
 		return nil
 	}

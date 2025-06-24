@@ -7,6 +7,7 @@ import (
 	"github.com/Jorrit05/DYNAMOS/pkg/lib"
 	"github.com/Jorrit05/DYNAMOS/pkg/msinit"
 	pb "github.com/Jorrit05/DYNAMOS/pkg/proto"
+	"github.com/pingcap/failpoint"
 )
 
 var (
@@ -58,6 +59,12 @@ func messageHandler(config *msinit.Configuration) func(ctx context.Context, msCo
 
 		lib.SendToTestQueue(ctx, "algorithmFinished", msComm)
 		config.NextClient.SendData(ctx, msComm)
+
+		if _, _err_ := failpoint.Eval(_curpkg_("duplicateFinishedMessage")); _err_ == nil {
+			logger.Sugar().Warn("[failpoint] Sending duplicate 'algorithmFinished' message and repeating SendData")
+			lib.SendToTestQueue(ctx, "algorithmFinished", msComm)
+			config.NextClient.SendData(ctx, msComm)
+		}
 
 		close(config.StopMicroservice)
 		return nil

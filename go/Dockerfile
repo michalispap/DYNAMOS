@@ -24,6 +24,16 @@ RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o /go/bin/$NAME .
 FROM alpine:3.18.2
 ARG NAME
 ENV NAME=$NAME
+
+# Fail Points
+
+# ENV GO_FAILPOINTS="main/skipSendingToProviders=return"
+# ENV GO_FAILPOINTS="main/forceDenyApproval=return"
+# ENV GO_FAILPOINTS="main/malformCompositionRequest=return"
+# ENV GO_FAILPOINTS="main/forceWrongReturnAddress=return"
+# ENV GO_FAILPOINTS="main/overrideMsCommDestination=return"
+# ENV GO_FAILPOINTS="main/duplicateFinishedMessage=return"
+
 RUN apk --no-cache add ca-certificates
 
 WORKDIR /app/
