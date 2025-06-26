@@ -1,8 +1,7 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# Add 'url' attribute.
-# Required by WebSocket::Driver client for SSL (not directly used by this class).
+# Adds 'url' attribute to SSLSocket for WebSocket::Driver.
 module OpenSSL
   module SSL
     class SSLSocket
@@ -11,35 +10,27 @@ module OpenSSL
   end
 end
 
-# Manages the connection to the DYNAMOS SUT.
+# Handles connection to DYNAMOS SUT (via RabbitMQ).
 class DynamosConnection
   def initialize(handler)
-    @handler = handler # The main adapter handler (DynamosHandler).
-    @socket  = nil
-    @driver  = nil
-    @queue_handler = nil # RabbitMQService instance.
+    @handler = handler
+    @queue_handler = nil
   end
 
-  # Establishes SUT connection (RabbitMQ).
-  # Initializes RabbitMQService and sets a callback for when connected.
+  # Connects to RabbitMQ and signals ready.
   def connect
     @queue_handler = RabbitMQService.new(@handler)
-    # Callback executed once RabbitMQService is connected.
-    @queue_handler.on_connected do
-      @handler.send_ready_to_amp # Notify AMP that adapter is ready.
-    end
-    @queue_handler.connect # Initiate RabbitMQ connection.
+    @queue_handler.on_connected { @handler.send_ready_to_amp }
+    @queue_handler.connect
   end
 
-  # Closes SUT connection (RabbitMQ).
-  # 'reason' and 'code' are for WebSocket API compatibility, not used here.
+  # Closes RabbitMQ connection.
   def close(reason: nil, code: 1000)
-    @queue_handler&.close # Delegate to RabbitMQService.
+    @queue_handler&.close
   end
 
-  # Sends a message to the SUT via RabbitMQ.
+  # Sends message to SUT via RabbitMQ.
   def send(message)
-    @queue_handler.send_message(message) # Delegate to RabbitMQService.
+    @queue_handler.send_message(message)
   end
 end
-

@@ -1,16 +1,11 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# The AdapterCore holds the state of the adapter. It communicates with the
-# BrokerConnection and the Handler.
-# The AdapterCore implements the core of a plugin-adapter. It handles the
-# connection with AMP's broker (via @broker_connection) and the connection
-# to the SUT (via @handler).
-# The AdapterCore is responsible for encoding/decoding the Protobuf messages.
-# One can see the AdapterCore as the generic part of the adapter and the
-# Handler as the implementation specific part of the adapter.
+# AdapterCore: main state machine for the adapter.
+# Talks to AMP (via BrokerConnection) and SUT (via Handler).
+# Handles protobuf encoding/decoding and message routing.
 class AdapterCore
-  # Possible states of the Adapter(Core).
+  # Adapter states.
   module State
     DISCONNECTED  = :disconnected
     CONNECTED     = :connected
@@ -20,7 +15,7 @@ class AdapterCore
     ERROR         = :error
   end
 
-  # Constructor.
+  # Sets up core, queues, and state.
   def initialize(name, broker_connection, handler)
     @name = name
     @broker_connection = broker_connection
@@ -33,7 +28,7 @@ class AdapterCore
       QThread.new { |item| parse_and_handle_message(item) }
   end
 
-  # Start the adapter core, which connects to AMP.
+  # Starts the adapter: connects to AMP.
   def start
     clear_qthread_queues
 
@@ -48,8 +43,7 @@ class AdapterCore
     end
   end
 
-  # BrokerConnection: WebSocket connection is opened.
-  # - send announcement to AMP.
+  # Called when WebSocket opens. Announces to AMP.
   def on_open
     logger.info 'on_open'
 
@@ -69,8 +63,7 @@ class AdapterCore
     end
   end
 
-  # BrokerConnection: connection is closed.
-  # - stop the handler
+  # Called when WebSocket closes. Stops handler and reconnects.
   def on_close(code, reason)
     @state = State::DISCONNECTED
     message = "Connection closed with code #{code}, and reason: #{reason}."
@@ -82,10 +75,7 @@ class AdapterCore
     start # reconnect to AMP - keep the adapter alive
   end
 
-  # Configuration received from AMP.
-  # - configure the handler,
-  # - start the handler,
-  # - send ready to AMP (should be done by handler).
+  # Handles config from AMP: configures handler and starts it.
   def on_configuration(configuration)
     logger.info 'on_configuration'
 
@@ -108,9 +98,7 @@ class AdapterCore
     end
   end
 
-  # Label (stimulus) received from AMP.
-  # - make handler offer the stimulus to the SUT,
-  # - acknowledge the actual stimulus back to AMP.
+  # Handles label (stimulus) from AMP: passes to handler.
   def on_label(label)
     logger.info "on_label: #{label.label}"
 
@@ -128,9 +116,7 @@ class AdapterCore
     end
   end
 
-  # Reset message received from AMP.
-  # - reset the handler,
-  # - send ready to AMP (should be done by handler).
+  # Handles reset from AMP: resets handler.
   def on_reset
     case @state
     when State::READY
@@ -143,23 +129,22 @@ class AdapterCore
     end
   end
 
-  # Error message received from AMP.
-  # - close the connection to AMP
+  # Handles error from AMP: closes connection.
   def on_error(message)
     @state = State::ERROR
     logger.info "Error message received from AMP: #{message}"
     @broker_connection.close(reason: message, code: 1000) # 1000 is normal closure
   end
 
+  # Queues AMP message for handling.
   def handle_message(data)
     logger.debug 'Adding message from AMP to the queue to be handled'
     @qthread_handle_message << data
   end
 
-  # Send response to AMP (callback for Handler).
-  # We do not check whether the label is actually a response.
-  # @param [String] physical_label as observed at the SUT
-  # @param [Time] timestamp when the response was observed
+  # Sends response label to AMP.
+  # physical_label: what SUT returned (string/JSON)
+  # timestamp: when SUT responded
   def send_response(label, physical_label, timestamp)
     logger.info "Sending response to AMP: #{label.label}."
     label = label.dup
@@ -168,7 +153,7 @@ class AdapterCore
     queue_message_to_amp(PluginAdapter::Api::Message.new(label: label))
   end
 
-  # Send Ready message to AMP (callback for Handler).
+  # Tells AMP we're ready.
   def send_ready
     logger.info "Sending 'Ready' to AMP."
     ready = PluginAdapter::Api::Message::Ready.new
@@ -176,8 +161,7 @@ class AdapterCore
     @state = State::READY
   end
 
-  # Send Error message to AMP (also callback for Handler).
-  # - close the connection with AMP
+  # Sends error to AMP and closes connection.
   def send_error(message)
     logger.info "Sending 'Error' to AMP and closing the connection."
     error = PluginAdapter::Api::Message::Error.new(message: message)
@@ -185,6 +169,7 @@ class AdapterCore
     @broker_connection.close(reason: message, code: 1000) # 1000 is normal closure
   end
 
+  # Announces supported labels/config to AMP.
   def send_announcement(name, labels, configuration)
     announcement = PluginAdapter::Api::Announcement.new(
       name: name,
@@ -194,11 +179,7 @@ class AdapterCore
     queue_message_to_amp(PluginAdapter::Api::Message.new(announcement: announcement))
   end
 
-  # Send stimulus (back) to AMP.
-  # We do not check that the label is indeed a stimulus.
-  # @param [PluginAdapter::Api:Label] stimulus to send back to AMP
-  # @param [String] physical_label as offered to the SUT
-  # @param [Time] timestamp when the stimulus was offered to the SUT
+  # Confirms stimulus to AMP (echoes what we sent to SUT).
   def send_stimulus_confirmation(label, physical_label, timestamp)
     logger.info "Sending stimulus (back) to AMP: #{label.label}."
     label = label.dup
@@ -209,8 +190,7 @@ class AdapterCore
 
   private
 
-  # Parse the binary message from AMP to a Protobuf message and call the
-  # appropriate method of this AdapterCore.
+  # Decodes AMP message and routes to handler.
   def parse_and_handle_message(data)
     logger.info 'handle_message'
 
@@ -240,37 +220,34 @@ class AdapterCore
     end
   end
 
-  # Clear both QThread queues.
+  # Empties both internal queues.
   def clear_qthread_queues
     logger.debug 'Clearing queues with pending messages'
     @qthread_to_amp.clear_queue
     @qthread_handle_message.clear_queue
   end
 
-  # Add message to the queue to be sent to AMP.
-  # @param [PluginAdapter::Api::Message] message
+  # Queues message to send to AMP.
   def queue_message_to_amp(message)
     logger.debug 'Adding message to the queue to AMP'
     @qthread_to_amp << message
   end
 
-  # Send Protobuf message to AMP.
-  # @param [PluginAdapter::Api::Message] message
+  # Actually sends protobuf message to AMP.
   def send_message_to_amp(message)
     logger.debug 'Sending message AMP'
     @broker_connection.binary(message.to_proto.bytes)
   end
 
-  # Number of nanoseconds in a second
+  # Nanoseconds in a second.
   NSEC_PER_SEC = 1_000_000_000
   private_constant :NSEC_PER_SEC
 
-  # Number of microseconds in a nanosecond
+  # Microseconds in a nanosecond.
   USEC_PER_NSEC = 1_000
   private_constant :USEC_PER_NSEC
 
-  # @param [Time, nil] time Time value (optional)
-  # @return [Integer] Number of nanoseconds since epoch
+  # Converts Time to nanoseconds since epoch.
   def time_to_nsec(time)
     return 0 if time.nil?
 

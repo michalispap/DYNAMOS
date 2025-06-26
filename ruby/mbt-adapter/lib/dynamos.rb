@@ -11,7 +11,7 @@ require 'base64'
 require 'net/http'
 require 'thread'
 
-# ----- Protobuf
+# --- Protobuf: load all message types
 
 # Dir[File.join(__dir__, 'messages', '*.rb')].each { |file| require file }
 $LOAD_PATH.push File.join(File.expand_path(__dir__), './messages')
@@ -26,7 +26,7 @@ require 'microserviceCommunication_pb'
 require 'rabbitMQ_pb'
 $LOAD_PATH.pop
 
-# ----- Logging
+# --- Logging setup
 
 # Step 1: Create a custom layout for the log format
 layout = Logging.layouts.pattern(pattern: '[%d] %-5l %c: %m\n')
@@ -44,7 +44,7 @@ Logging.logger.root.level = LOG_LEVEL
 # Step 5: Include the Logging module globally in the application
 send(:include, Logging.globally)
 
-# ----- Socket: add method url and url=
+# --- Add url accessor to sockets for WebSocket::Driver
 
 # WebSocket::Driver requires its socket object to have an attribute url,
 # so we add this accessor to both TCPSocket and SSLSocket.
@@ -57,7 +57,7 @@ class SSLSocket
   attr_accessor :url
 end
 
-# ----- source files
+# --- Require source files
 
 %w[
   adapter_core

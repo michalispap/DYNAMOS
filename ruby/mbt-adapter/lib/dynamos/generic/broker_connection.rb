@@ -1,8 +1,8 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# Manages the WebSocket connection with AMP's broker.
-# Calls back on AdapterCore for message handling and lifecycle events.
+# Handles WebSocket connection to AMP's broker.
+# Forwards events and messages to AdapterCore.
 class BrokerConnection
   def initialize(url, token)
     @url          = url
@@ -12,11 +12,12 @@ class BrokerConnection
     @driver       = nil
   end
 
+  # Registers AdapterCore for callbacks.
   def register_adapter_core(adapter_core)
     @adapter_core = adapter_core
   end
 
-  # Establishes WebSocket connection to AMP and sets up event handlers.
+  # Opens WebSocket to AMP, sets up event handlers.
   def connect
     uri = URI.parse(@url)
     @socket = TCPSocket.new(uri.host, uri.port)
@@ -44,13 +45,11 @@ class BrokerConnection
     start_listening
   end
 
-  # Maximum length of a close reason in bytes (WebSocket protocol limit).
+  # Max close reason length (WebSocket protocol).
   REASON_LENGTH = 123
   private_constant :REASON_LENGTH
 
-  # Closes the WebSocket connection.
-  # @param [Integer] code The close code.
-  # @param [String] reason The reason for closing.
+  # Closes WebSocket. Truncates reason if too long.
   def close(reason: nil, code: 1000)
     return if @socket.nil?
 
@@ -62,7 +61,7 @@ class BrokerConnection
     @driver.close(reason, code)
   end
 
-  # Sends binary data over the WebSocket.
+  # Sends binary data to AMP.
   def binary(bytes)
     raise 'No connection to websocket (yet). Is the adapter connected to AMP?' if @driver.nil?
 
@@ -71,7 +70,7 @@ class BrokerConnection
 
   private
 
-  # Upgrades a standard TCPSocket to an SSLSocket for secure communication.
+  # Upgrades TCP socket to SSL.
   def upgrade_to_ssl(socket)
     ssl_socket = OpenSSL::SSL::SSLSocket.new(socket)
     ssl_socket.sync_close = true # also close the wrapped socket
@@ -79,17 +78,17 @@ class BrokerConnection
     ssl_socket
   end
 
-  # Initiates the WebSocket driver and starts the read loop.
+  # Starts WebSocket driver and read loop.
   def start_listening
     @driver.start
     read_and_forward(@driver)
   end
 
-  # Max bytes to read from socket in one operation.
+  # Max bytes to read at once.
   READ_SIZE_LIMIT = 1024 * 1024
   private_constant :READ_SIZE_LIMIT
 
-  # Continuously reads data from the socket and forwards it to the WebSocket driver.
+  # Reads from socket and feeds data to WebSocket driver.
   def read_and_forward(connector)
     loop do
       begin

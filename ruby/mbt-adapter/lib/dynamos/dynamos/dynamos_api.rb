@@ -1,71 +1,72 @@
-# Handles HTTP communication with the DYNAMOS API Gateway.
+# Talks HTTP to DYNAMOS API Gateway.
 class DynamosApi
-  # @param api_gateway_url [String] Base URL of the DYNAMOS API.
   def initialize(api_gateway_url = 'http://api-gateway.api-gateway.svc.cluster.local:8080/api/v1')
     @api_gateway_url = api_gateway_url
   end
 
-  # Sends a POST request to the DYNAMOS API.
-  # This is the primary method for stimulating the SUT via HTTP.
-  # @param request_body [String] JSON request body.
-  # @param endpoint [String] API endpoint (e.g., 'requestApproval').
-  # @return [Hash] Contains :code (Integer HTTP status or 0 if network/client error) and :body_str (String or nil).
+  # POST to /requestApproval (stimulus).
   def stimulate_dynamos(request_body, endpoint = 'requestApproval')
     uri = URI.parse("#{@api_gateway_url}/#{endpoint}")
-    request_properties = { 'Content-Type' => 'application/json' }
-
-    logger.info("Stimulating SUT at URL: #{uri}")
-    logger.info("Request body: #{request_body}")
-
-    begin
-      response = Net::HTTP.post(uri, request_body, request_properties)
-      { code: response.code.to_i, body_str: response.body }
-    rescue StandardError => e # Catch network or HTTP errors.
-      logger.error("Error during HTTP POST to #{uri}: #{e.class.name} - #{e.message}")
-      # Return 0 for client-side/network errors, and a nil body.
-      { code: 0, body_str: nil }
-    end
+    log_http_request("Stimulating SUT", uri, request_body)
+    http_post(uri, request_body)
   end
 
-  # Sends a PUT request to switch the archetype.
-  # @param request_body [String] The JSON request body.
-  # @return [Hash] Contains :code (Integer HTTP status or 0 if network/client error) and :body_str (String or nil).
+  # PUT to orchestrator for archetype switch.
   def switch_archetype(request_body)
     orchestrator_url = 'http://orchestrator.orchestrator.svc.cluster.local:8080/api/v1'
     uri = URI.parse("#{orchestrator_url}/archetypes/agreements")
-
-    logger.info("Switching archetype at URL: #{uri}")
-    logger.info("Request body: #{request_body}")
-
-    begin
-      http = Net::HTTP.new(uri.host, uri.port)
-      request = Net::HTTP::Put.new(uri.path, 'Content-Type' => 'application/json')
-      request.body = request_body
-      response = http.request(request)
-      { code: response.code.to_i, body_str: response.body }
-    rescue StandardError => e
-      logger.error("Error during HTTP PUT to #{uri}: #{e.class.name} - #{e.message}")
-      { code: 0, body_str: nil }
-    end
+    log_http_request("Switching archetype", uri, request_body)
+    http_put(uri, request_body)
   end
 
-  # Parses the HTTP response body (JSON) for a "results" structure.
-  # Specifically looks for "jobId" and "responses" keys.
-  # @param body_str [String, nil] Raw HTTP response body.
-  # @return [Hash, nil] Parsed hash if valid "results" structure, otherwise nil.
+  # Parses HTTP response body (expects jobId + responses).
   def parse_response(body_str)
-    # Return nil if body is empty or not parsable.
     return nil if body_str.nil? || body_str.strip.empty?
     parsed = JSON.parse(body_str)
-    # Check for essential "results" keys and that "responses" is an array.
     if parsed.key?("jobId") && parsed.key?("responses") && parsed["responses"].is_a?(Array)
-      return parsed
+      parsed
     else
-      return nil # Body does not match expected "results" structure.
+      nil
     end
-  rescue JSON::ParserError # Handle invalid JSON.
+  rescue JSON::ParserError
     logger.error("Failed to parse HTTP response body as JSON: #{body_str}")
-    return nil
+    nil
   end
 
+  private
+
+  # Logs HTTP request details.
+  def log_http_request(action, uri, body)
+    logger.info("#{action} at URL: #{uri}")
+    logger.info("Request body: #{body}")
+  end
+
+  # POST helper.
+  def http_post(uri, body)
+    request_properties = { 'Content-Type' => 'application/json' }
+    Net::HTTP.post(uri, body, request_properties).yield_self do |response|
+      { code: response.code.to_i, body_str: response.body }
+    end
+  rescue StandardError => e
+    log_http_error("HTTP POST", uri, e)
+    { code: 0, body_str: nil }
+  end
+
+  # PUT helper.
+  def http_put(uri, body)
+    http = Net::HTTP.new(uri.host, uri.port)
+    request = Net::HTTP::Put.new(uri.path, 'Content-Type' => 'application/json')
+    request.body = body
+    http.request(request).yield_self do |response|
+      { code: response.code.to_i, body_str: response.body }
+    end
+  rescue StandardError => e
+    log_http_error("HTTP PUT", uri, e)
+    { code: 0, body_str: nil }
+  end
+
+  # Logs HTTP errors.
+  def log_http_error(method, uri, exception)
+    logger.error("Error during #{method} to #{uri}: #{exception.class.name} - #{exception.message}")
+  end
 end

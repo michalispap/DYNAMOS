@@ -1,45 +1,45 @@
 # Copyright 2023 Axini B.V. https://www.axini.com, see: LICENSE.txt.
 # frozen_string_literal: true
 
-# Abstract class. Any specific implementation of this class handles the
-# connection with a SUT.
+# Abstract base for SUT handlers.
 class Handler
-  # @attr [PluginAdapter::Api:Configuration] configuration of this handler
+  # Handler config (set by AdapterCore).
   attr_accessor :configuration
 
-  # @param [AdapterCore] adapter_core The adapter core to notify of responses
-  # and errors of the SUT via callbacks.
+  # Registers AdapterCore for callbacks.
   def register_adapter_core(adapter_core)
     @adapter_core = adapter_core
     @configuration = default_configuration
   end
 
-  # Prepare to start testing.
+  # Start SUT connection.
   def start
     raise NoMethodError, ABSTRACT_METHOD
   end
 
-  # Stop testing.
+  # Stop SUT connection.
   def stop
     raise NoMethodError, ABSTRACT_METHOD
   end
 
-  # Prepare for the next test case.
+  # Reset SUT for next test.
   def reset
     raise NoMethodError, ABSTRACT_METHOD
   end
 
-  # Stimulate the SUT and return the physical label.
+  # Stimulate SUT with label.
   # @param [PluginAdapter::Api:Label] stimulus to inject into the SUT.
   def stimulate(_label)
     raise NoMethodError, ABSTRACT_METHOD
   end
 
+  # Returns supported labels.
   # @return [<PluginAdapter::Api:Label>] The labels supported by the plugin adapter.
   def supported_labels
     raise NoMethodError, ABSTRACT_METHOD
   end
 
+  # Returns default config.
   # The default configuration for this plugin adapter.
   def default_configuration
     raise NoMethodError, ABSTRACT_METHOD
