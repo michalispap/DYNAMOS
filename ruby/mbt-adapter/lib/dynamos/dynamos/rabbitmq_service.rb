@@ -100,7 +100,7 @@ class RabbitMQService
 
   # Stores message in class-level array.
   def store_message(message)
-    logger.info("Received and stored message: #{message}")
+    logger.debug("Received and stored message: #{message}")
     @@messages << message
   end
 
