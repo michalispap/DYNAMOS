@@ -40,7 +40,7 @@ class RabbitMQService
     logger.info "Waiting for messages on RabbitMQ queue '#{@queue_name}'..."
     @queue.subscribe(block: false) do |_delivery_info, properties, body|
       logger.info "*** Received RabbitMQ properties #{properties}"
-      logger.info "*** Received RabbitMQ message: #{body}"
+      logger.debug "*** Received RabbitMQ message: #{body}"
       handle_incoming_message(body)
     end
   rescue Interrupt
