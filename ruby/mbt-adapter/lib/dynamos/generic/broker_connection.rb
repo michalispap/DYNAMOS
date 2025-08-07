@@ -7,6 +7,7 @@ class BrokerConnection
   def initialize(url, token)
     @url          = url
     @token        = token
+    @uri          = URI.parse(url)
     @adapter_core = nil
     @socket       = nil
     @driver       = nil
@@ -19,8 +20,7 @@ class BrokerConnection
 
   # Opens WebSocket to AMP, sets up event handlers.
   def connect
-    uri = URI.parse(@url)
-    @socket = TCPSocket.new(uri.host, uri.port)
+    @socket = TCPSocket.new(@uri.host, @uri.port)
     @socket = upgrade_to_ssl(@socket)
     @socket.url = @url
 
@@ -74,6 +74,7 @@ class BrokerConnection
   def upgrade_to_ssl(socket)
     ssl_socket = OpenSSL::SSL::SSLSocket.new(socket)
     ssl_socket.sync_close = true # also close the wrapped socket
+    ssl_socket.hostname = @uri.host
     ssl_socket.connect
     ssl_socket
   end
